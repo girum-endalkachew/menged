@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Compass, Github } from "lucide-react";
+import { Compass, Code2 } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -21,7 +21,7 @@ export default function Footer() {
           rel="noopener noreferrer"
           className="hover:text-[#17332D] dark:hover:text-[#F4F0E6] transition-colors flex items-center gap-1 text-inherit no-underline"
         >
-          <Github className="w-3.5 h-3.5" />
+          <Code2 className="w-3.5 h-3.5 text-[#C99A3D]" />
           <span>girum-endalkachew/menged</span>
         </a>
       </div>
