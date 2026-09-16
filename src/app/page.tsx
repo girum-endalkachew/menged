@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { useMengedStore } from "@/store/useMengedStore";
@@ -21,14 +21,14 @@ import JourneyCompanion from "@/components/journey/JourneyCompanion";
 import { ArrowLeft, SlidersHorizontal, Play } from "lucide-react";
 
 export default function Page() {
-  const { 
-    view, setView, activeTab, journeyState, startJourney, 
-    selectedRoute, preference, setPreference 
+  const {
+    view, setView, activeTab, journeyState, startJourney,
+    selectedRoute, preference, setPreference
   } = useMengedStore();
 
   if (view === "landing") {
     return (
-      <div className="min-h-screen flex flex-col bg-[#FAF9F6]">
+      <div className="min-h-screen flex flex-col bg-surface-ivory">
         <Navbar />
         <main className="flex-1">
           <HeroSection />
@@ -43,14 +43,19 @@ export default function Page() {
   const isJourneyActive = journeyState !== "PLANNING" && journeyState !== "ROUTE_SELECTED";
 
   return (
-    <div className="min-h-screen flex bg-[#FAF9F6]">
+    <div className="min-h-screen flex bg-surface-ivory">
       <Sidebar />
       <div className="flex-1 flex flex-col min-h-screen">
-        <header className="p-4 border-b border-[#E4E7E5] flex justify-between items-center lg:hidden bg-white">
-          <button onClick={() => setView("landing")} className="text-sm font-bold text-[#123C2F] bg-transparent border-none">
+        <header className="p-4 border-b border-border flex justify-between items-center lg:hidden bg-surface">
+          <button
+            onClick={() => setView("landing")}
+            className="text-sm font-bold text-brand-forest bg-transparent border-none"
+          >
             Menged መንገድ
           </button>
-          <span className="text-[10px] font-mono text-[#9AA49F] uppercase tracking-wider">Addis Transit</span>
+          <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">
+            Addis Transit
+          </span>
         </header>
 
         <main className="p-4 lg:p-6 max-w-7xl mx-auto w-full flex-1 mb-20 lg:mb-0">
@@ -59,10 +64,13 @@ export default function Page() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
               <div className="lg:col-span-5 space-y-6">
                 <div className="flex items-center justify-between">
-                  <button onClick={() => setView("landing")} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#66736D] hover:text-[#123C2F] bg-transparent border-none p-0 cursor-pointer">
+                  <button
+                    onClick={() => setView("landing")}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-brand-forest bg-transparent border-none p-0 cursor-pointer"
+                  >
                     <ArrowLeft className="w-4 h-4" /> <span>Back</span>
                   </button>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#E7B84B] font-bold">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-accent-gold font-bold">
                     {isJourneyActive ? "Live Companion" : "Trip Planner"}
                   </span>
                 </div>
@@ -72,8 +80,8 @@ export default function Page() {
                 ) : (
                   <>
                     <VoiceMic />
-                    <div className="glass-panel p-3.5 flex items-center justify-between bg-white">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#9AA49F] flex items-center gap-1.5 font-semibold">
+                    <div className="rounded-2xl border border-border p-3.5 flex items-center justify-between bg-surface">
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-text-muted flex items-center gap-1.5 font-semibold">
                         <SlidersHorizontal className="w-3.5 h-3.5" /> Pref
                       </span>
                       <div className="flex gap-1">
@@ -83,8 +91,8 @@ export default function Page() {
                             onClick={() => setPreference(pref)}
                             className={`text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition-all cursor-pointer border ${
                               preference === pref
-                                ? "bg-[#123C2F] text-white border-[#123C2F]"
-                                : "bg-transparent border-transparent text-[#66736D] hover:bg-[#F3F4F1]"
+                                ? "bg-brand-forest text-white border-brand-forest"
+                                : "bg-transparent border-transparent text-text-secondary hover:bg-surface-soft"
                             }`}
                           >
                             {pref === "cheapest" ? "Cheapest" : pref === "fastest" ? "Fastest" : pref === "least_walking" ? "Less Walk" : "Balanced"}
@@ -94,7 +102,10 @@ export default function Page() {
                     </div>
                     <RouteSelector />
                     {selectedRoute && (
-                      <button onClick={startJourney} className="btn-forest w-full py-3.5 text-sm uppercase tracking-widest font-bold">
+                      <button
+                        onClick={startJourney}
+                        className="w-full py-3.5 text-sm uppercase tracking-widest font-bold rounded-xl bg-brand-forest text-white flex items-center justify-center gap-2 hover:bg-brand-green transition-colors cursor-pointer"
+                      >
                         <Play className="w-4 h-4 fill-current" />
                         <span>Start Journey</span>
                       </button>
