@@ -1,61 +1,28 @@
 "use client";
 
 import React from "react";
+import { ArrowUpRight, Mic2, Route, Volume2 } from "lucide-react";
 
 export default function FeaturesSection() {
   return (
-    <section id="how-it-works" className="py-24 px-6 max-w-[1200px] mx-auto">
-      <div className="mb-16 space-y-4 max-w-2xl">
-        <span className="text-xs font-mono uppercase tracking-widest text-[#2E8B68] font-semibold">How It Works</span>
-        <h2 className="font-h2 text-[#123C2F]">
-          Designed for the way people actually navigate.
-        </h2>
-        <p className="font-body text-[#66736D]">
-          No complex menu mazes. Simply speak your destination and your constraints, and we handle the routing engine.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Step 1 */}
-        <div className="glass-panel p-8 space-y-5 bg-[#FAF9F6]/50">
-          <div className="w-12 h-12 rounded-2xl bg-[#E7B84B]/20 text-[#123C2F] flex items-center justify-center font-mono font-bold text-lg border border-[#E7B84B]/30">
-            01
-          </div>
-          <h3 className="font-h3 text-[#17231F]">Speak naturally</h3>
-          <p className="text-sm text-[#66736D] leading-relaxed">
-            Say where you are, where you need to go, and any constraints like budget or walking tolerance.
-          </p>
-          <div className="p-3 rounded-lg bg-white border border-[#E4E7E5] text-[11px] font-mono text-[#66736D] shadow-sm">
-            "Bole to Mexico, under 20 birr"
-          </div>
+    <section id="how-it-works" className="bg-white px-6 py-24 lg:px-10 lg:py-32">
+      <div className="mx-auto max-w-7xl">
+        <div className="flex flex-col justify-between gap-6 border-b border-[#e3e8e2] pb-10 md:flex-row md:items-end">
+          <div className="max-w-2xl"><span className="text-xs font-mono font-bold uppercase tracking-[0.18em] text-[#2e8b68]">A calmer way through the city</span><h2 className="mt-4 text-4xl font-semibold leading-tight tracking-[-0.03em] text-[#123c2f] sm:text-5xl">Less guessing. More knowing where to go next.</h2></div>
+          <p className="max-w-sm text-sm leading-6 text-[#66736d]">Menged keeps the important details close: what to take, what it should cost, and when to move.</p>
         </div>
-
-        {/* Step 2 */}
-        <div className="glass-panel p-8 space-y-5 bg-[#FAF9F6]/50">
-          <div className="w-12 h-12 rounded-2xl bg-[#E7B84B]/20 text-[#123C2F] flex items-center justify-center font-mono font-bold text-lg border border-[#E7B84B]/30">
-            02
-          </div>
-          <h3 className="font-h3 text-[#17231F]">Menged understands</h3>
-          <p className="text-sm text-[#66736D] leading-relaxed">
-            Intent extraction identifies your origin, transfer hubs, and destination without demanding exact street addresses.
-          </p>
-          <div className="p-3 rounded-lg bg-white border border-[#E4E7E5] text-[11px] font-mono text-[#66736D] shadow-sm">
-            Org: Bole · Dst: Mexico · Max: 20
-          </div>
-        </div>
-
-        {/* Step 3 */}
-        <div className="glass-panel p-8 space-y-5 bg-[#FAF9F6]/50">
-          <div className="w-12 h-12 rounded-2xl bg-[#E7B84B]/20 text-[#123C2F] flex items-center justify-center font-mono font-bold text-lg border border-[#E7B84B]/30">
-            03
-          </div>
-          <h3 className="font-h3 text-[#17231F]">We guide you</h3>
-          <p className="text-sm text-[#66736D] leading-relaxed">
-            Instantly see your options. Once you pick a route, Menged tracks your GPS and guides you step-by-step.
-          </p>
-          <div className="p-3 rounded-lg bg-[#2E8B68]/10 border border-[#2E8B68]/20 text-[11px] font-mono text-[#123C2F] font-semibold shadow-sm">
-            "Get off at the next stop."
-          </div>
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
+          {[
+            { number: "01", icon: Mic2, title: "Say it your way", text: "Start with a natural request. Mention your destination, budget, or how much walking feels right.", detail: "Bole to Mexico, under 20 birr" },
+            { number: "02", icon: Route, title: "See the trade-offs", text: "Compare options by fare, time, transfers, and walking instead of choosing a route blindly.", detail: "25 ETB · 35 min · 1 transfer" },
+            { number: "03", icon: Volume2, title: "Keep moving", text: "Once you choose, guidance stays simple and timely from the first step to the final stop.", detail: "Get off at the next stop" },
+          ].map(({ number, icon: Icon, title, text, detail }) => (
+            <article key={number} className="group relative overflow-hidden rounded-3xl border border-[#dfe7df] bg-[#f7f8f4] p-7 transition-transform hover:-translate-y-1">
+              <div className="flex items-center justify-between"><span className="font-mono text-sm font-bold text-[#e7b84b]">{number}</span><Icon className="h-5 w-5 text-[#2e8b68]" /></div>
+              <h3 className="mt-14 text-2xl font-semibold tracking-tight text-[#123c2f]">{title}</h3><p className="mt-3 text-sm leading-6 text-[#66736d]">{text}</p>
+              <div className="mt-8 flex items-center justify-between border-t border-[#dfe7df] pt-4 text-[11px] font-mono font-bold text-[#123c2f]"><span>{detail}</span><ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" /></div>
+            </article>
+          ))}
         </div>
       </div>
     </section>

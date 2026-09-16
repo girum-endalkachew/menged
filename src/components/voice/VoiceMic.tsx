@@ -1,10 +1,29 @@
 ﻿"use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Mic, Volume2, Sparkles } from "lucide-react";
 import { useMengedStore } from "@/store/useMengedStore";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+const waveformBars = [18, 26, 14, 30, 20, 24, 32, 16, 22, 28] as const;
+
+type SpeechRecognitionEventLike = {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+};
+
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
 export default function VoiceMic() {
   const {
@@ -14,75 +33,90 @@ export default function VoiceMic() {
     setTranscript,
     setOrigin,
     setDestination,
-    setPreference
+    setPreference,
   } = useMengedStore();
 
-  const [recognition, setRecognition] = useState<any>(null);
+  const recognitionRef = useRef<{ start: () => void; stop: () => void } | null>(null);
+
+  const parseVoiceIntent = useCallback(
+    (text: string) => {
+      const lower = text.toLowerCase();
+      toast.success(`Heard: "${text}"`);
+
+      if (lower.includes("bole")) setOrigin("Bole");
+      if (lower.includes("piassa") || lower.includes("pyassa")) setDestination("Piassa");
+      if (lower.includes("mexico")) setDestination("Mexico");
+
+      if (lower.includes("cheapest") || lower.includes("cheap") || lower.includes("birr")) {
+        setPreference("cheapest");
+        toast.success("Preference set to: Cheapest");
+      } else if (lower.includes("fastest") || lower.includes("fast") || lower.includes("quick")) {
+        setPreference("fastest");
+        toast.success("Preference set to: Fastest");
+      } else if (lower.includes("walk") || lower.includes("less walking")) {
+        setPreference("least_walking");
+        toast.success("Preference set to: Least Walking");
+      }
+    },
+    [setDestination, setOrigin, setPreference],
+  );
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const rec = new SpeechRecognition();
-        rec.continuous = false;
-        rec.interimResults = false;
-        rec.lang = "en-US";
+    if (typeof window === "undefined") return;
 
-        rec.onresult = (event: any) => {
-          const text = event.results[0][0].transcript;
-          setTranscript(text);
-          parseVoiceIntent(text);
-        };
+    const SpeechRecognitionCtor =
+      (window as typeof window & {
+        SpeechRecognition?: SpeechRecognitionCtor;
+        webkitSpeechRecognition?: SpeechRecognitionCtor;
+      }).SpeechRecognition ||
+      (window as typeof window & {
+        SpeechRecognition?: SpeechRecognitionCtor;
+        webkitSpeechRecognition?: SpeechRecognitionCtor;
+      }).webkitSpeechRecognition;
 
-        rec.onerror = () => {
-          setIsListening(false);
-          toast.error("Speech recognition failed or timed out.");
-        };
+    if (!SpeechRecognitionCtor) return;
 
-        rec.onend = () => {
-          setIsListening(false);
-        };
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
 
-        setRecognition(rec);
-      }
-    }
-  }, []);
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
+      const text = event.results[0][0].transcript;
+      setTranscript(text);
+      parseVoiceIntent(text);
+    };
 
-  // NOTE: this is a placeholder browser-SpeechRecognition + keyword-match
-  // implementation, NOT the Voxide voice pipeline from the spec
-  // (VOICE -> TRANSCRIPTION -> INTENT -> VALIDATION -> DETERMINISTIC SYSTEM -> RESPONSE -> SPEECH).
-  // Keep this clearly labeled as a stub until the real integration lands.
-  const parseVoiceIntent = (text: string) => {
-    const lower = text.toLowerCase();
-    toast.success(`Heard: "${text}"`);
+    recognition.onerror = () => {
+      setIsListening(false);
+      toast.error("Speech recognition failed or timed out.");
+    };
 
-    if (lower.includes("bole")) setOrigin("Bole");
-    if (lower.includes("piassa") || lower.includes("pyassa")) setDestination("Piassa");
-    if (lower.includes("mexico")) setDestination("Mexico");
+    recognition.onend = () => {
+      setIsListening(false);
+    };
 
-    if (lower.includes("cheapest") || lower.includes("cheap") || lower.includes("birr")) {
-      setPreference("cheapest");
-      toast.success("Preference set to: Cheapest");
-    } else if (lower.includes("fastest") || lower.includes("fast") || lower.includes("quick")) {
-      setPreference("fastest");
-      toast.success("Preference set to: Fastest");
-    } else if (lower.includes("walk") || lower.includes("less walking")) {
-      setPreference("least_walking");
-      toast.success("Preference set to: Least Walking");
-    }
-  };
+    recognitionRef.current = recognition;
+
+    return () => {
+      recognition.stop();
+      recognitionRef.current = null;
+    };
+  }, [parseVoiceIntent, setIsListening, setTranscript]);
 
   const toggleListening = () => {
+    const recognition = recognitionRef.current;
+
     if (isListening) {
       recognition?.stop();
       setIsListening(false);
-    } else {
-      setTranscript("");
-      setIsListening(true);
-      recognition?.start();
-      toast.info("Listening... Speak your trip request!", { id: "mic-listening" });
+      return;
     }
+
+    setTranscript("");
+    setIsListening(true);
+    recognition?.start();
+    toast.info("Listening... Speak your trip request!", { id: "mic-listening" });
   };
 
   return (
@@ -127,14 +161,14 @@ export default function VoiceMic() {
 
       {isListening && (
         <div className="flex items-center gap-1 h-8 my-3">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((bar) => (
+          {waveformBars.map((bar, index) => (
             <div
-              key={bar}
+              key={bar + index}
               className="w-1 bg-brand-green rounded-full transition-all duration-150"
               style={{
-                height: `${Math.floor(Math.random() * 24) + 6}px`,
-                animation: `bounce 0.8s ease-in-out infinite alternate`,
-                animationDelay: `${bar * 0.08}s`
+                height: `${bar}px`,
+                animation: "bounce 0.8s ease-in-out infinite alternate",
+                animationDelay: `${index * 0.08}s`,
               }}
             />
           ))}
@@ -143,7 +177,7 @@ export default function VoiceMic() {
 
       <div className="w-full mt-2 text-center">
         <p className="text-sm font-medium text-text-secondary min-h-[40px] italic">
-          {transcript ? `"${transcript}"` : `Try saying: "Take me from Bole to Piassa, cheapest options"`}
+          {transcript ? `&ldquo;${transcript}&rdquo;` : "Try saying: &lsquo;Take me from Bole to Piassa, cheapest options&rsquo;"}
         </p>
       </div>
     </div>

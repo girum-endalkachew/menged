@@ -1,7 +1,6 @@
 ﻿@import "tailwindcss";
-@import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   /* ===== COLORS ===== */
@@ -60,18 +59,18 @@
   --radius-2xl: 24px;
 
   /* ===== SPACING SCALE (documented, Tailwind's default already matches 4px base) ===== */
-  --spacing-4xs: 4px;
-  --spacing-3xs: 8px;
-  --spacing-2xs: 12px;
-  --spacing-xs: 16px;
-  --spacing-sm: 20px;
-  --spacing-md: 24px;
-  --spacing-lg: 32px;
-  --spacing-xl: 40px;
-  --spacing-2xl: 48px;
-  --spacing-3xl: 64px;
-  --spacing-4xl: 80px;
-  --spacing-5xl: 96px;
+  --menged-spacing-4xs: 4px;
+  --menged-spacing-3xs: 8px;
+  --menged-spacing-2xs: 12px;
+  --menged-spacing-xs: 16px;
+  --menged-spacing-sm: 20px;
+  --menged-spacing-md: 24px;
+  --menged-spacing-lg: 32px;
+  --menged-spacing-xl: 40px;
+  --menged-spacing-2xl: 48px;
+  --menged-spacing-3xl: 64px;
+  --menged-spacing-4xl: 80px;
+  --menged-spacing-5xl: 96px;
 }
 
 :root {

@@ -2,20 +2,16 @@
 
 import React from "react";
 import { useMengedStore } from "@/store/useMengedStore";
-import { 
-  Footprints, 
-  Bus, 
-  MapPin, 
-  Navigation, 
-  CheckCircle2, 
-  Clock, 
-  ArrowRight, 
-  AlertCircle, 
-  Volume2, 
+import {
+  Footprints,
+  Bus,
+  Navigation,
+  CheckCircle2,
+  ArrowRight,
+  AlertCircle,
+  Volume2,
   X,
   Compass,
-  Repeat2,
-  ShieldCheck
 } from "lucide-react";
 
 export default function JourneyCompanion() {
@@ -166,7 +162,7 @@ export default function JourneyCompanion() {
               <span>Voice Guidance</span>
             </div>
             <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] m-0">
-              "You are at the stop. Confirm when you board the vehicle."
+              &ldquo;You are at the stop. Confirm when you board the vehicle.&rdquo;
             </p>
           </div>
 
@@ -174,7 +170,7 @@ export default function JourneyCompanion() {
             onClick={() => setJourneyState("ONBOARD")}
             className="btn-forest w-full justify-center py-3 text-xs uppercase tracking-wider"
           >
-            <span>I'm on board</span>
+            <span>I&apos;m on board</span>
             <CheckCircle2 className="w-4 h-4" />
           </button>
         </div>
@@ -250,7 +246,7 @@ export default function JourneyCompanion() {
             onClick={() => setJourneyState("WALKING_TO_DESTINATION")}
             className="btn-forest w-full justify-center py-3 text-xs uppercase tracking-wider"
           >
-            <span>I've stepped off</span>
+            <span>I&apos;ve stepped off</span>
             <Footprints className="w-4 h-4" />
           </button>
         </div>

@@ -2,141 +2,71 @@
 
 import React from "react";
 import { useMengedStore } from "@/store/useMengedStore";
-import { ArrowRight, Mic, Navigation, ShieldCheck, MapPin } from "lucide-react";
+import { ArrowRight, Mic, Navigation, ShieldCheck, MapPin, Sparkles, Route } from "lucide-react";
 
 export default function HeroSection() {
-  const { setView, setOrigin, setDestination, setPreference, setActiveTab } = useMengedStore();
-
-  const handleQuickDemo = (from: string, to: string, pref: "cheapest" | "fastest") => {
-    setOrigin(from);
-    setDestination(to);
-    setPreference(pref);
-    setActiveTab("plan");
-    setView("app");
-  };
+  const { setView } = useMengedStore();
 
   return (
-    <section className="relative min-h-screen pt-32 pb-20 px-6 max-w-[1400px] mx-auto flex flex-col justify-center overflow-hidden">
-      {/* Cinematic Background Layer */}
-      <div className="absolute inset-0 -z-10 bg-[#FAF9F6]">
-        {/* Soft sunlight gradient from top right */}
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-[radial-gradient(circle_at_top_right,rgba(231,184,75,0.15),transparent_60%)] pointer-events-none" />
-        {/* Soft forest green gradient from bottom left */}
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[radial-gradient(circle_at_bottom_left,rgba(46,139,104,0.08),transparent_60%)] pointer-events-none" />
-        {/* Subtle architectural grid */}
-        <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#123C2F_1px,transparent_1px)] [background-size:24px_24px]" />
-      </div>
+    <section className="relative overflow-hidden bg-[#f7f5ef] px-6 pb-20 pt-32 sm:pt-36 lg:min-h-[760px] lg:px-10 lg:pb-28">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(231,184,75,0.2),transparent_25%),radial-gradient(circle_at_12%_86%,rgba(46,139,104,0.13),transparent_28%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(18,60,47,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(18,60,47,0.04)_1px,transparent_1px)] [background-size:42px_42px]" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center relative z-10 w-full">
-        {/* Left Column: Editorial Headline */}
-        <div className="lg:col-span-6 space-y-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#E4E7E5] bg-white/60 backdrop-blur-md shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#E7B84B] animate-pulse" />
-            <span className="text-[10px] font-mono uppercase tracking-widest text-[#66736D] font-semibold">
-              Addis Ababa Transit Intelligence
-            </span>
+      <div className="relative mx-auto grid w-full max-w-7xl items-center gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
+        <div className="max-w-xl">
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#dfe4dc] bg-white/75 px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#66736d] shadow-sm backdrop-blur">
+            <span className="h-2 w-2 rounded-full bg-[#e7b84b] shadow-[0_0_0_4px_rgba(231,184,75,0.15)]" />
+            Addis Ababa transit intelligence
           </div>
 
-          <h1 className="font-hero text-[#123C2F]">
-            Your voice<br />knows the way.
+          <h1 className="max-w-[640px] text-5xl font-semibold leading-[0.98] tracking-[-0.045em] text-[#123c2f] sm:text-7xl lg:text-[5.8rem]">
+            Get there with a little more certainty.
           </h1>
-
-          <p className="font-body text-[#66736D] max-w-md text-lg leading-relaxed">
-            Tell Menged where you're going. We'll figure out how to get you there, and stay with you until you arrive.
+          <p className="mt-7 max-w-lg text-lg leading-8 text-[#66736d] sm:text-xl">
+            Speak your destination in the language you use every day. Menged turns the city into a clear plan, a fair fare, and guidance that stays with you.
           </p>
 
-          <div className="flex flex-wrap items-center gap-4 pt-4">
-            <button onClick={() => setView("app")} className="btn-forest px-8 py-3.5 shadow-lg">
-              <span>Plan a trip</span>
-              <ArrowRight className="w-4 h-4" />
+          <div className="mt-9 flex flex-wrap items-center gap-3">
+            <button onClick={() => setView("app")} className="inline-flex items-center gap-3 rounded-full bg-[#123c2f] px-6 py-3.5 text-sm font-bold text-white shadow-[0_14px_30px_-14px_rgba(18,60,47,0.7)] transition-transform hover:-translate-y-0.5 hover:bg-[#1d624d]">
+              <Mic className="h-4 w-4" />
+              <span>Plan by voice</span>
+              <ArrowRight className="h-4 w-4" />
             </button>
-            <a href="#how-it-works" className="btn-glass px-6 py-3.5 no-underline text-inherit">
-              See how it works
+            <a href="#how-it-works" className="inline-flex items-center gap-2 rounded-full border border-[#cfd8d0] bg-white/70 px-6 py-3.5 text-sm font-semibold text-[#123c2f] no-underline transition-colors hover:border-[#2e8b68] hover:bg-white">
+              See the journey
             </a>
           </div>
 
-          <div className="pt-8 flex flex-col gap-3">
-            <span className="text-[10px] font-mono text-[#9AA49F] uppercase tracking-wider">Try asking naturally:</span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => handleQuickDemo("Bole", "Piassa", "cheapest")}
-                className="text-xs font-medium px-4 py-2 rounded-full border border-[#E4E7E5] bg-white hover:border-[#2E8B68] text-[#17231F] transition-all shadow-sm hover:shadow-md cursor-pointer"
-              >
-                "Bole to Piassa with 30 birr"
-              </button>
-            </div>
+          <div className="mt-10 flex flex-wrap gap-x-7 gap-y-2 text-xs font-semibold text-[#66736d]">
+            <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#2e8b68]" /> Fare-aware</span>
+            <span className="inline-flex items-center gap-2"><Navigation className="h-4 w-4 text-[#2e8b68]" /> Stop-by-stop</span>
+            <span className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#e7b84b]" /> Built for Addis</span>
           </div>
         </div>
 
-        {/* Right Column: Floating Product UI */}
-        <div className="lg:col-span-6 relative">
-          <div className="glass-panel p-6 shadow-[0_20px_60px_-15px_rgba(18,60,47,0.1)] relative overflow-hidden bg-white/80 backdrop-blur-2xl border-[#E4E7E5]/60 max-w-md ml-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-[#F3F4F1]">
-              <div className="flex items-center gap-2">
-                <Navigation className="w-4 h-4 text-[#2E8B68]" />
-                <span className="text-xs font-mono uppercase tracking-widest text-[#9AA49F]">Live Demo</span>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#123C2F]/5 text-[#123C2F] font-semibold border border-[#123C2F]/10">
-                ADDIS GRID
-              </span>
-            </div>
-
-            {/* Voice Input Mockup */}
-            <div className="my-5 p-4 rounded-xl bg-[#FAF9F6] border border-[#E4E7E5] flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#E7B84B] text-[#17231F] flex items-center justify-center flex-shrink-0 shadow-sm border-2 border-white">
-                <Mic className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-[9px] font-mono text-[#9AA49F] uppercase tracking-widest block mb-0.5">Heard</span>
-                <p className="text-sm font-medium text-[#123C2F] italic m-0">"Bole to Piassa, cheapest option"</p>
-              </div>
-            </div>
-
-            {/* Transit Route Graphic */}
-            <div className="pl-2 space-y-0 relative">
-              <div className="absolute left-4 top-2 bottom-6 w-[2px] bg-gradient-to-b from-[#123C2F] via-[#E7B84B] to-[#2E8B68]" />
-              
-              <div className="flex items-start gap-4 pb-6 relative">
-                <div className="w-4 h-4 rounded-full bg-[#123C2F] border-2 border-white shadow-sm flex items-center justify-center mt-0.5 z-10">
-                  <div className="w-1 h-1 bg-white rounded-full" />
-                </div>
+        <div className="relative mx-auto w-full max-w-2xl lg:pt-8">
+          <div className="absolute -right-5 -top-2 hidden rounded-full border border-[#d8dfd6] bg-white/80 px-4 py-2 text-[10px] font-mono font-bold uppercase tracking-widest text-[#66736d] shadow-sm sm:block">
+            <span className="mr-2 text-[#2e8b68]">●</span> Route confidence 92%
+          </div>
+          <div className="relative overflow-hidden rounded-[2rem] border border-[#dce3da] bg-[#123c2f] p-3 shadow-[0_30px_80px_-30px_rgba(18,60,47,0.55)] sm:p-5">
+            <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.07)_1px,transparent_1px)] [background-size:34px_34px]" />
+            <div className="relative rounded-[1.45rem] bg-[#f8f7f2] p-5 sm:p-7">
+              <div className="flex items-start justify-between border-b border-[#e5e8e2] pb-5">
                 <div>
-                  <p className="text-sm font-bold text-[#17231F] m-0">Bole Medhanialem</p>
-                  <p className="text-[11px] text-[#66736D] m-0 mt-0.5">Board Minibus toward Mexico</p>
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-widest text-[#2e8b68]"><Route className="h-4 w-4" /> Your route</div>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[#123c2f]">Bole to Piassa</h2>
                 </div>
-                <span className="ml-auto text-xs font-mono text-[#123C2F] font-semibold bg-[#F3F4F1] px-2 py-1 rounded">15 ETB</span>
+                <span className="rounded-full bg-[#e7b84b]/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-[#8a6817]">Balanced</span>
               </div>
 
-              <div className="flex items-start gap-4 pb-6 relative">
-                <div className="w-4 h-4 rounded-full bg-[#E7B84B] border-2 border-white shadow-sm mt-0.5 z-10" />
-                <div>
-                  <p className="text-sm font-bold text-[#17231F] m-0">Mexico Square</p>
-                  <p className="text-[11px] text-[#66736D] m-0 mt-0.5">Transfer (2 min walk)</p>
-                </div>
+              <div className="relative py-7 pl-2">
+                <div className="absolute bottom-10 left-[13px] top-10 w-px bg-gradient-to-b from-[#123c2f] via-[#e7b84b] to-[#2e8b68]" />
+                <div className="relative flex gap-4 pb-8"><span className="z-10 mt-1 h-3 w-3 rounded-full border-2 border-[#f8f7f2] bg-[#123c2f] shadow-[0_0_0_1px_#123c2f]" /><div><p className="font-semibold text-[#17231f]">Bole Medhanialem</p><p className="mt-1 text-xs text-[#66736d]">Walk to the minibus queue</p></div><span className="ml-auto font-mono text-xs font-bold text-[#123c2f]">08:30</span></div>
+                <div className="relative flex gap-4 pb-8"><span className="z-10 mt-1 h-3 w-3 rounded-full border-2 border-[#f8f7f2] bg-[#e7b84b] shadow-[0_0_0_1px_#e7b84b]" /><div><p className="font-semibold text-[#17231f]">Mexico Square</p><p className="mt-1 text-xs text-[#66736d]">Transfer · 2 min walk</p></div><span className="ml-auto font-mono text-xs text-[#66736d]">09:02</span></div>
+                <div className="relative flex gap-4"><span className="z-10 mt-1 flex h-3 w-3 items-center justify-center rounded-full border-2 border-[#f8f7f2] bg-[#2e8b68] shadow-[0_0_0_1px_#2e8b68]"><MapPin className="h-2 w-2 text-white" /></span><div><p className="font-semibold text-[#17231f]">Piassa / Arada</p><p className="mt-1 text-xs text-[#66736d]">Arrive with confidence</p></div><span className="ml-auto font-mono text-xs font-bold text-[#2e8b68]">09:05</span></div>
               </div>
 
-              <div className="flex items-start gap-4 relative">
-                <div className="w-4 h-4 rounded-full bg-[#2E8B68] border-2 border-white shadow-sm flex items-center justify-center mt-0.5 z-10">
-                  <MapPin className="w-2.5 h-2.5 text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-[#17231F] m-0">Piassa (Churchill Ave)</p>
-                  <p className="text-[11px] text-[#66736D] m-0 mt-0.5">Destination</p>
-                </div>
-                <span className="ml-auto text-xs font-mono text-[#123C2F] font-semibold bg-[#F3F4F1] px-2 py-1 rounded">10 ETB</span>
-              </div>
-            </div>
-
-            {/* Total Footer */}
-            <div className="mt-6 pt-4 border-t border-[#F3F4F1] flex justify-between items-center text-xs bg-white rounded-b-xl">
-              <div className="flex items-center gap-1.5 text-[#2E8B68] font-medium bg-[#2E8B68]/10 px-2 py-1 rounded-md">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Verified</span>
-              </div>
-              <div className="font-mono font-bold text-[#17231F] bg-[#FAF9F6] px-3 py-1.5 rounded-md border border-[#E4E7E5]">
-                25 ETB · ~35 mins
-              </div>
+              <div className="flex items-center justify-between rounded-xl bg-[#edf3ed] p-4"><div><p className="text-[10px] font-bold uppercase tracking-widest text-[#66736d]">Estimated fare</p><p className="mt-1 font-mono text-xl font-bold text-[#123c2f]">25 ETB</p></div><div className="text-right"><p className="text-[10px] font-bold uppercase tracking-widest text-[#66736d]">Travel time</p><p className="mt-1 font-mono text-xl font-bold text-[#123c2f]">35 min</p></div></div>
             </div>
           </div>
         </div>
