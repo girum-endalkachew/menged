@@ -18,7 +18,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Menged — Your Voice Knows the Way",
-  description: "Voice-first transportation intelligence for Addis Ababa and Ethiopian cities.",
+  description: "Voice-first transportation intelligence for Ethiopia.",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}>
         <TooltipProvider>
           {children}
@@ -35,10 +35,11 @@ export default function RootLayout({
             position="top-center"
             toastOptions={{
               style: {
-                background: "var(--color-surface)",
-                color: "var(--color-ink)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "14px",
+                background: "var(--base-white)",
+                color: "var(--primary-forest)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "12px",
+                boxShadow: "0 8px 30px -12px rgba(18, 60, 47, 0.12)"
               },
             }}
           />

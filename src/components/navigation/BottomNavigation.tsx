@@ -10,13 +10,13 @@ export default function BottomNavigation() {
   const items: { id: ActiveTab | "voice"; labelEn: string; labelAm: string; icon: React.ReactNode }[] = [
     { id: "home", labelEn: "Home", labelAm: "ዋና ገፅ", icon: <Home className="w-5 h-5" /> },
     { id: "journeys", labelEn: "Trips", labelAm: "ታሪክ", icon: <History className="w-5 h-5" /> },
-    { id: "voice", labelEn: "Voice", labelAm: "ድምፅ", icon: <Mic className="w-5 h-5 text-[#10251F]" /> },
+    { id: "voice", labelEn: "Voice", labelAm: "ድምፅ", icon: <Mic className="w-5 h-5 text-[#FFFFFF]" /> },
     { id: "saved", labelEn: "Saved", labelAm: "የተቀመጡ", icon: <Bookmark className="w-5 h-5" /> },
     { id: "profile", labelEn: "Profile", labelAm: "መገለጫ", icon: <User className="w-5 h-5" /> },
   ];
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pt-2 bg-[#F6F3EA]/90 dark:bg-[#10251F]/90 backdrop-blur-xl border-t border-[#D9DED8] dark:border-[#315047]">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 px-4 pb-6 pt-3 bg-[#FFFFFF]/90 backdrop-blur-xl border-t border-[#E4E7E5] shadow-[0_-4px_24px_-12px_rgba(18,60,47,0.1)]">
       <div className="flex items-center justify-around max-w-md mx-auto">
         {items.map((item) => {
           if (item.id === "voice") {
@@ -27,7 +27,7 @@ export default function BottomNavigation() {
                   setActiveTab("plan");
                   setIsListening(true);
                 }}
-                className="w-12 h-12 rounded-full bg-[#C99A3D] text-[#10251F] flex items-center justify-center -mt-6 shadow-lg border-2 border-[#F6F3EA] dark:border-[#10251F] cursor-pointer"
+                className="w-14 h-14 rounded-full bg-[#123C2F] text-[#FFFFFF] flex items-center justify-center -mt-8 shadow-[0_8px_20px_-6px_rgba(18,60,47,0.4)] border-4 border-[#FAF9F6] cursor-pointer hover:bg-[#2E8B68] transition-colors"
                 aria-label="Activate Voice"
               >
                 {item.icon}
@@ -40,10 +40,10 @@ export default function BottomNavigation() {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id as ActiveTab)}
-              className={`flex flex-col items-center gap-1 text-[10px] font-medium bg-transparent border-none cursor-pointer ${
+              className={`flex flex-col items-center gap-1 text-[10px] font-medium bg-transparent border-none cursor-pointer transition-colors ${
                 isActive
-                  ? "text-[#173C32] dark:text-[#D2A64C]"
-                  : "text-[#6E7772] dark:text-[#A8B5AE]"
+                  ? "text-[#123C2F]"
+                  : "text-[#9AA49F] hover:text-[#66736D]"
               }`}
             >
               {item.icon}
