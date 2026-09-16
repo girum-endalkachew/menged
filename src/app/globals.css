@@ -1,12 +1,6 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
-/* ============================================
-   MENGED DESIGN SYSTEM
-   Premium · Calm · Human · Voice-first
-   ============================================ */
-
-@theme {
-  /* --- Light Mode (Default) --- */
+:root {
   --color-ivory: #F6F3EA;
   --color-surface: #FFFFFF;
   --color-forest: #173C32;
@@ -19,24 +13,14 @@
   --color-border: #D9DED8;
   --color-map-bg: #E8E5DA;
 
-  /* --- Typography --- */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains), monospace;
 
-  /* --- Spacing & Radius --- */
   --radius-card: 22px;
   --radius-glass: 999px;
   --radius-btn: 14px;
-
-  /* --- Motion --- */
-  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
-  --duration-normal: 300ms;
-  --duration-slow: 500ms;
 }
 
-/* ============================================
-   DARK MODE OVERRIDES
-   ============================================ */
 .dark {
   --color-ivory: #10251F;
   --color-surface: #18352D;
@@ -51,260 +35,187 @@
   --color-map-bg: #0E1F1A;
 }
 
-/* ============================================
-   BASE STYLES
-   ============================================ */
 * {
   box-sizing: border-box;
 }
 
-html {
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-body {
+html, body {
   font-family: var(--font-sans);
   background-color: var(--color-ivory);
   color: var(--color-ink);
   min-height: 100vh;
-  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
 }
 
 ::selection {
   background-color: var(--color-gold);
-  color: var(--color-ivory);
+  color: #10251F;
 }
 
-/* ============================================
-   TYPOGRAPHY SCALE
-   ============================================ */
-.text-hero {
-  font-size: clamp(3rem, 6vw, 6rem);
+/* Typography Utility Classes */
+.font-hero {
+  font-size: clamp(2.75rem, 5.5vw, 5.5rem);
   font-weight: 500;
-  line-height: 1.05;
+  line-height: 1.06;
   letter-spacing: -0.03em;
 }
 
-.text-h1 {
-  font-size: clamp(2.25rem, 4vw, 4rem);
+.font-h1 {
+  font-size: clamp(2rem, 3.8vw, 3.5rem);
   font-weight: 500;
-  line-height: 1.1;
+  line-height: 1.12;
   letter-spacing: -0.025em;
 }
 
-.text-h2 {
-  font-size: clamp(1.75rem, 3vw, 3rem);
+.font-h2 {
+  font-size: clamp(1.5rem, 2.5vw, 2.25rem);
   font-weight: 500;
-  line-height: 1.15;
+  line-height: 1.2;
   letter-spacing: -0.02em;
 }
 
-.text-h3 {
-  font-size: clamp(1.25rem, 2vw, 1.875rem);
+.font-h3 {
+  font-size: clamp(1.15rem, 1.6vw, 1.45rem);
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.3;
   letter-spacing: -0.015em;
 }
 
-.text-body {
-  font-size: 1.0625rem;
+.font-body {
+  font-size: 1rem;
   font-weight: 400;
   line-height: 1.65;
 }
 
-.text-small {
+.font-small {
   font-size: 0.8125rem;
   font-weight: 400;
   line-height: 1.5;
 }
 
-.text-mono {
+.font-code {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   letter-spacing: 0.02em;
 }
 
-/* ============================================
-   GLASS MORPHISM
-   ============================================ */
-.glass {
+/* Glass & Surfaces */
+.glass-nav {
   background: rgba(255, 255, 255, 0.45);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.65);
-  border-radius: var(--radius-glass);
+  border-radius: 999px;
 }
 
-.dark .glass {
-  background: rgba(24, 53, 45, 0.55);
+.dark .glass-nav {
+  background: rgba(24, 53, 45, 0.6);
   border: 1px solid rgba(49, 80, 71, 0.6);
 }
 
-.glass-card {
-  background: rgba(255, 255, 255, 0.6);
+.glass-panel {
+  background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
 }
 
-.dark .glass-card {
-  background: rgba(24, 53, 45, 0.45);
-  border-color: var(--color-border);
+.dark .glass-panel {
+  background: rgba(24, 53, 45, 0.5);
+  border: 1px solid var(--color-border);
 }
 
-/* ============================================
-   BUTTONS
-   ============================================ */
-.btn-primary {
+/* Primary Button */
+.btn-forest {
   background-color: var(--color-forest);
   color: var(--color-ivory);
-  padding: 0.75rem 1.75rem;
+  padding: 0.75rem 1.6rem;
   border-radius: var(--radius-btn);
   font-weight: 500;
   font-size: 0.9375rem;
-  transition: all var(--duration-normal) var(--ease-smooth);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   border: none;
   cursor: pointer;
+  transition: all 0.25s ease;
 }
 
-.btn-primary:hover {
+.btn-forest:hover {
   background-color: var(--color-forest-hover);
   transform: translateY(-1px);
 }
 
-.dark .btn-primary {
+.dark .btn-forest {
   background-color: var(--color-gold);
-  color: var(--color-ivory);
+  color: #10251F;
 }
 
-.dark .btn-primary:hover {
+.dark .btn-forest:hover {
   background-color: var(--color-gold-light);
 }
 
-.btn-secondary {
+/* Secondary Button */
+.btn-glass {
   background: rgba(255, 255, 255, 0.35);
   backdrop-filter: blur(12px);
   color: var(--color-forest);
-  padding: 0.75rem 1.75rem;
+  padding: 0.75rem 1.6rem;
   border-radius: var(--radius-btn);
   font-weight: 500;
   font-size: 0.9375rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   border: 1px solid var(--color-border);
-  transition: all var(--duration-normal) var(--ease-smooth);
   cursor: pointer;
+  transition: all 0.25s ease;
 }
 
-.btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.55);
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.6);
   border-color: var(--color-forest);
 }
 
-.dark .btn-secondary {
-  background: rgba(24, 53, 45, 0.4);
+.dark .btn-glass {
+  background: rgba(24, 53, 45, 0.45);
   color: var(--color-ink);
   border-color: var(--color-border);
 }
 
-/* ============================================
-   VOICE BUTTON
-   ============================================ */
+.dark .btn-glass:hover {
+  background: rgba(24, 53, 45, 0.75);
+  border-color: var(--color-gold);
+}
+
+/* Voice Orb Control */
 .voice-orb {
-  width: 88px;
-  height: 88px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
   background: var(--color-gold);
+  color: #10251F;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid rgba(201, 154, 61, 0.3);
+  border: 4px solid rgba(201, 154, 61, 0.25);
   cursor: pointer;
-  transition: all var(--duration-normal) var(--ease-smooth);
-  position: relative;
+  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .voice-orb:hover {
-  transform: scale(1.06);
-  box-shadow: 0 0 40px rgba(201, 154, 61, 0.25);
+  transform: scale(1.05);
 }
 
-.voice-orb.listening {
-  animation: voice-pulse 2s var(--ease-smooth) infinite;
-  box-shadow: 0 0 60px rgba(201, 154, 61, 0.35);
-}
-
-@keyframes voice-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 154, 61, 0.3); }
-  50% { box-shadow: 0 0 0 20px rgba(201, 154, 61, 0); }
-}
-
-/* ============================================
-   WAVEFORM BARS
-   ============================================ */
-.waveform-bar {
-  width: 3px;
-  border-radius: 999px;
+.voice-orb-active {
   background: var(--color-gold);
-  animation: wave 1.2s ease-in-out infinite alternate;
+  animation: pulse-ring 2s infinite;
 }
 
-@keyframes wave {
-  0% { height: 6px; opacity: 0.4; }
-  100% { height: 28px; opacity: 1; }
-}
-
-/* ============================================
-   ROUTE DRAW ANIMATION
-   ============================================ */
-.route-line {
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 1000;
-  animation: draw-route 2s var(--ease-smooth) forwards;
-}
-
-@keyframes draw-route {
-  to { stroke-dashoffset: 0; }
-}
-
-/* ============================================
-   FADE & SLIDE UTILITIES
-   ============================================ */
-.fade-in {
-  animation: fadeIn var(--duration-slow) var(--ease-smooth) forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.slide-up {
-  animation: slideUp var(--duration-slow) var(--ease-smooth) forwards;
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(24px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ============================================
-   SCROLLBAR
-   ============================================ */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-muted);
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(201, 154, 61, 0.4); }
+  70% { box-shadow: 0 0 0 24px rgba(201, 154, 61, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(201, 154, 61, 0); }
 }

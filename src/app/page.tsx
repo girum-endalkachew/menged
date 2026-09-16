@@ -1,85 +1,88 @@
-﻿"use client";
+"use client";
 
 import React from "react";
+import { useMengedStore } from "@/store/useMengedStore";
+import Navbar from "@/components/navigation/Navbar";
+import HeroSection from "@/components/landing/HeroSection";
+import FeaturesSection from "@/components/landing/FeaturesSection";
+import FareTransparencySection from "@/components/landing/FareTransparencySection";
+import Footer from "@/components/navigation/Footer";
 import VoiceMic from "@/components/voice/VoiceMic";
 import RouteSelector from "@/components/routes/RouteSelector";
 import MengedMap from "@/components/map/MengedMap";
-import { useMengedStore } from "@/store/useMengedStore";
-import { Badge } from "@/components/ui/badge";
-import { Map, Navigation, Heart, ShieldAlert, Sparkles, Languages } from "lucide-react";
+import { ArrowLeft, Navigation, SlidersHorizontal } from "lucide-react";
 
-export default function Home() {
-  const { origin, destination, language, setLanguage } = useMengedStore();
+export default function Page() {
+  const { view, setView, origin, destination, preference, setPreference } = useMengedStore();
 
+  if (view === "landing") {
+    return (
+      <div className="min-h-screen flex flex-col justify-between">
+        <Navbar />
+        <main>
+          <HeroSection />
+          <FeaturesSection />
+          <FareTransparencySection />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // TRIP PLANNER VIEW (The Core Product)
   return (
-    <main className="min-h-screen grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 max-w-[1600px] mx-auto">
-      {/* Column Left: Controls & Options (5/12 grid spacing) */}
-      <div className="lg:col-span-5 flex flex-col gap-6 justify-between h-full">
-        {/* Brand Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Navigation className="h-5 w-5 text-black transform rotate-45" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
-                Menged <span className="text-emerald-400">መንገድ</span>
-              </h1>
-              <p className="text-xs text-zinc-400 font-medium">Your Voice Knows the Way</p>
-            </div>
-          </div>
+    <div className="min-h-screen flex flex-col bg-[#F6F3EA] dark:bg-[#10251F] text-[#17332D] dark:text-[#F4F0E6]">
+      <Navbar />
 
-          {/* Controls */}
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setLanguage(language === "en" ? "am" : "en")}
-              className="flex items-center gap-1 text-xs bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg text-zinc-300 hover:text-white transition-colors"
+      <main className="pt-24 pb-8 px-6 max-w-7xl mx-auto w-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column: Trip UI (~40%) */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Header & Back */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setView("landing")}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6E7772] dark:text-[#A8B5AE] hover:text-[#17332D] dark:hover:text-[#F4F0E6] bg-transparent border-none cursor-pointer p-0"
             >
-              <Languages className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{language === "en" ? "አማርኛ" : "English"}</span>
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Overview</span>
             </button>
-            <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 font-bold bg-emerald-500/5">
-              HACKATHON MVP
-            </Badge>
+            <span className="text-xs font-mono uppercase tracking-widest text-[#C99A3D]">Trip Planner</span>
           </div>
-        </div>
 
-        {/* Dynamic Navigation Summary */}
-        <div className="bg-zinc-900/40 border border-zinc-800 p-4 rounded-xl flex items-center justify-between">
-          <div>
-            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Current Query</span>
-            <h2 className="text-sm font-bold text-zinc-200 mt-1">
-              From <span className="text-emerald-400">{origin}</span> to <span className="text-indigo-400">{destination}</span>
-            </h2>
+          {/* Core Voice Mic Component */}
+          <VoiceMic />
+
+          {/* Filter Preferences Bar */}
+          <div className="glass-panel p-4 flex items-center justify-between">
+            <span className="text-xs font-mono uppercase tracking-wider text-[#6E7772] dark:text-[#A8B5AE] flex items-center gap-1.5">
+              <SlidersHorizontal className="w-3.5 h-3.5" /> Preference
+            </span>
+            <div className="flex gap-1.5">
+              {(["cheapest", "fastest", "least_walking", "balanced"] as const).map((pref) => (
+                <button
+                  key={pref}
+                  onClick={() => setPreference(pref)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                    preference === pref
+                      ? "bg-[#173C32] dark:bg-[#D2A64C] text-[#F6F3EA] dark:text-[#10251F] border-transparent font-medium"
+                      : "bg-transparent border-[#D9DED8] dark:border-[#315047] text-[#6E7772] dark:text-[#A8B5AE]"
+                  }`}
+                >
+                  {pref === "cheapest" ? "Cheapest" : pref === "fastest" ? "Fastest" : pref === "least_walking" ? "Less Walk" : "Balanced"}
+                </button>
+              ))}
+            </div>
           </div>
-          <Badge className="bg-zinc-950 text-zinc-400 border border-zinc-800">
-            Active
-          </Badge>
-        </div>
 
-        {/* Speech Recognition Mic */}
-        <VoiceMic />
-
-        {/* Route Options List */}
-        <div className="flex-1 overflow-y-auto">
+          {/* Route Options List */}
           <RouteSelector />
         </div>
 
-        {/* Footer info */}
-        <footer className="text-xs text-zinc-500 flex items-center justify-between border-t border-zinc-900 pt-4">
-          <span className="flex items-center gap-1">
-            Built with <Heart className="w-3 h-3 text-red-500 fill-red-500" /> for Stark Hackathon
-          </span>
-          <span className="font-mono">v1.0.0</span>
-        </footer>
-      </div>
-
-      {/* Column Right: Live Spatial Grid (7/12 grid spacing) */}
-      <div className="lg:col-span-7 h-[calc(100vh-2rem)] flex flex-col gap-4">
-        <div className="flex-1 h-full min-h-[400px]">
+        {/* Right Column: Interactive Map (~60%) */}
+        <div className="lg:col-span-7 h-[calc(100vh-8rem)] sticky top-24">
           <MengedMap />
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

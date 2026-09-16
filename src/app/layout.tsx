@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,10 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
-        style={{ fontFamily: "var(--font-sans)" }}
-      >
+      <body className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}>
         <TooltipProvider>
           {children}
           <Toaster
@@ -42,7 +39,6 @@ export default function RootLayout({
                 color: "var(--color-ink)",
                 border: "1px solid var(--color-border)",
                 borderRadius: "14px",
-                fontFamily: "var(--font-sans)",
               },
             }}
           />
