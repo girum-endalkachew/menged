@@ -50,12 +50,24 @@ export interface DirectJourneyResult {
   };
 }
 
+export class TransitServiceMetrics {
+  static serviceCalls = 0;
+  static sqlQueries = 0;
+
+  static reset() {
+    this.serviceCalls = 0;
+    this.sqlQueries = 0;
+  }
+}
+
 export class TransitService {
   /**
    * Find stops matching a name query (case-insensitive) directly from PostgreSQL
    */
   static async findStopByName(name: string): Promise<TransitStopData[]> {
+    TransitServiceMetrics.serviceCalls++;
     try {
+      TransitServiceMetrics.sqlQueries++;
       return await db
         .select()
         .from(stops)
@@ -70,6 +82,7 @@ export class TransitService {
    * Find stops within a given radius in meters directly from PostgreSQL
    */
   static async findStopsNear(lat: number, lon: number, radiusMeters = 500): Promise<TransitStopData[]> {
+    TransitServiceMetrics.serviceCalls++;
     const degreesPerMeter = 1 / 111000;
     const maxDegreeDelta = radiusMeters * degreesPerMeter;
 
@@ -79,6 +92,7 @@ export class TransitService {
     const maxLon = lon + maxDegreeDelta;
 
     try {
+      TransitServiceMetrics.sqlQueries++;
       const candidateStops = await db
         .select()
         .from(stops)
@@ -103,15 +117,19 @@ export class TransitService {
    * Get all routes serving a specific stop directly from PostgreSQL
    */
   static async getRoutesForStop(stopId: string): Promise<TransitRouteData[]> {
+    TransitServiceMetrics.serviceCalls++;
     try {
+      TransitServiceMetrics.sqlQueries++;
       const times = await db.select().from(stopTimes).where(eq(stopTimes.stopId, stopId));
       const tripIds = times.map((t) => t.tripId);
       if (tripIds.length === 0) return [];
 
+      TransitServiceMetrics.sqlQueries++;
       const matchedTrips = await db.select().from(trips).where(inArray(trips.id, tripIds));
       const routeIds = Array.from(new Set(matchedTrips.map((t) => t.routeId)));
       if (routeIds.length === 0) return [];
 
+      TransitServiceMetrics.sqlQueries++;
       return await db.select().from(routes).where(inArray(routes.id, routeIds));
     } catch (err: any) {
       throw new Error(`[DATABASE_CONNECTION_ERROR] Failed to query routes for stop: ${err?.message}`);
@@ -122,7 +140,9 @@ export class TransitService {
    * Get trips for a route directly from PostgreSQL
    */
   static async getTripsForRoute(routeId: string) {
+    TransitServiceMetrics.serviceCalls++;
     try {
+      TransitServiceMetrics.sqlQueries++;
       return await db.select().from(trips).where(eq(trips.routeId, routeId));
     } catch (err: any) {
       throw new Error(`[DATABASE_CONNECTION_ERROR] Failed to query trips for route: ${err?.message}`);
@@ -133,7 +153,9 @@ export class TransitService {
    * Get ordered stops for a specific trip directly from PostgreSQL
    */
   static async getOrderedStopsForTrip(tripId: string) {
+    TransitServiceMetrics.serviceCalls++;
     try {
+      TransitServiceMetrics.sqlQueries++;
       const times = await db
         .select()
         .from(stopTimes)
@@ -143,6 +165,7 @@ export class TransitService {
 
       times.sort((a, b) => a.stopSequence - b.stopSequence);
       const stopIds = Array.from(new Set(times.map((t) => t.stopId)));
+      TransitServiceMetrics.sqlQueries++;
       const matchedStops = await db.select().from(stops).where(inArray(stops.id, stopIds));
       const stopMap = new Map(matchedStops.map((s) => [s.id, s]));
 
@@ -154,6 +177,83 @@ export class TransitService {
       }));
     } catch (err: any) {
       throw new Error(`[DATABASE_CONNECTION_ERROR] Failed to query ordered stops for trip: ${err?.message}`);
+    }
+  }
+
+  /**
+   * Bulk-fetch ordered stops for multiple trips to avoid N+1 query amplification
+   */
+  static async getBulkOrderedStopsForTrips(tripIds: string[]) {
+    TransitServiceMetrics.serviceCalls++;
+    if (tripIds.length === 0) return new Map();
+
+    try {
+      TransitServiceMetrics.sqlQueries++;
+      const times = await db.select().from(stopTimes).where(inArray(stopTimes.tripId, tripIds));
+      if (times.length === 0) return new Map();
+
+      const stopIds = Array.from(new Set(times.map((t) => t.stopId)));
+      TransitServiceMetrics.sqlQueries++;
+      const matchedStops = await db.select().from(stops).where(inArray(stops.id, stopIds));
+      const stopMap = new Map(matchedStops.map((s) => [s.id, s]));
+
+      const resultMap = new Map<
+        string,
+        Array<{ stopSequence: number; arrivalTime: string | null; departureTime: string | null; stop: TransitStopData }>
+      >();
+
+      times.forEach((t) => {
+        if (!resultMap.has(t.tripId)) {
+          resultMap.set(t.tripId, []);
+        }
+        resultMap.get(t.tripId)!.push({
+          stopSequence: t.stopSequence,
+          arrivalTime: t.arrivalTime,
+          departureTime: t.departureTime,
+          stop: stopMap.get(t.stopId) || { id: t.stopId, name: t.stopId, latitude: 0, longitude: 0 },
+        });
+      });
+
+      for (const list of resultMap.values()) {
+        list.sort((a, b) => a.stopSequence - b.stopSequence);
+      }
+
+      return resultMap;
+    } catch (err: any) {
+      throw new Error(`[DATABASE_CONNECTION_ERROR] Failed to bulk query ordered stops: ${err?.message}`);
+    }
+  }
+
+  /**
+   * Bulk-fetch stop times, trips, and routes serving a set of stops
+   */
+  static async getStopTimesAndTripsForStops(stopIds: string[]) {
+    TransitServiceMetrics.serviceCalls++;
+    if (stopIds.length === 0) return { stopTimes: [], trips: [], routes: [], stops: [] };
+
+    try {
+      TransitServiceMetrics.sqlQueries++;
+      const times = await db.select().from(stopTimes).where(inArray(stopTimes.stopId, stopIds));
+      if (times.length === 0) return { stopTimes: [], trips: [], routes: [], stops: [] };
+
+      const tripIds = Array.from(new Set(times.map((t) => t.tripId)));
+      TransitServiceMetrics.sqlQueries++;
+      const matchedTrips = await db.select().from(trips).where(inArray(trips.id, tripIds));
+
+      const routeIds = Array.from(new Set(matchedTrips.map((t) => t.routeId)));
+      TransitServiceMetrics.sqlQueries++;
+      const matchedRoutes = await db.select().from(routes).where(inArray(routes.id, routeIds));
+
+      const matchedStops = await db.select().from(stops).where(inArray(stops.id, stopIds));
+
+      return {
+        stopTimes: times,
+        trips: matchedTrips,
+        routes: matchedRoutes,
+        stops: matchedStops,
+      };
+    } catch (err: any) {
+      throw new Error(`[DATABASE_CONNECTION_ERROR] Failed to bulk query stop times and trips: ${err?.message}`);
     }
   }
 

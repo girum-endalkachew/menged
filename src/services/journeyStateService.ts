@@ -38,6 +38,23 @@ export class JourneyStateService {
     location: GPSLocation,
     journey: Journey
   ): StateEvaluationResult {
+    // Input validation
+    if (!activeState || typeof activeState !== "object") {
+      throw new Error("Invalid activeState: state object required");
+    }
+    if (!journey || !Array.isArray(journey.legs) || journey.legs.length === 0) {
+      throw new Error("Invalid journey: journey with legs required");
+    }
+    if (
+      !location ||
+      typeof location.latitude !== "number" ||
+      typeof location.longitude !== "number" ||
+      isNaN(location.latitude) ||
+      isNaN(location.longitude)
+    ) {
+      throw new Error("Invalid location: valid latitude and longitude required");
+    }
+
     // If journey is already ARRIVED, return stable terminal state
     if (activeState.currentState === "ARRIVED") {
       return {
@@ -51,8 +68,16 @@ export class JourneyStateService {
       };
     }
 
+    let activeLegIndex = activeState.currentLegIndex ?? 0;
+    if (isNaN(activeLegIndex) || activeLegIndex < 0) {
+      activeLegIndex = 0;
+    } else if (activeLegIndex >= journey.legs.length) {
+      activeLegIndex = journey.legs.length - 1;
+    }
+
     const nextState: ActiveJourneyState = {
       ...activeState,
+      currentLegIndex: activeLegIndex,
       lastLocation: location,
     };
 
@@ -60,13 +85,12 @@ export class JourneyStateService {
 
     // Helper: Find next transit leg at or after current leg index
     const findNextTransitLegIndex = (startIndex: number): number => {
-      for (let i = startIndex; i < journey.legs.length; i++) {
-        if (journey.legs[i].type === "TRANSIT") return i;
+      for (let i = Math.max(0, startIndex); i < journey.legs.length; i++) {
+        if (journey.legs[i]?.type === "TRANSIT") return i;
       }
       return -1;
     };
 
-    const activeLegIndex = activeState.currentLegIndex ?? 0;
     const currentLeg = journey.legs[activeLegIndex] || journey.legs[0];
     const nextTransitIdx = findNextTransitLegIndex(activeLegIndex);
     const activeTransitLeg =
@@ -99,7 +123,8 @@ export class JourneyStateService {
 
           if (distToBoarding <= BOARDING_STOP_THRESHOLD_METERS) {
             nextState.currentState = "AT_STOP";
-            nextState.boardingConfirmed = false; // Reset boarding confirmation upon entering new stop
+            // Invariant: Preserve valid early boarding confirmation when arriving at AT_STOP
+            nextState.boardingConfirmed = activeState.boardingConfirmed ?? false;
             nextState.activeInstruction = `You have reached ${activeTransitLeg.boardingStop.name}. Wait here for vehicle ${activeTransitLeg.routeShortName || ""}.`;
             nextState.voicePrompt = `You are at ${activeTransitLeg.boardingStop.name}. Wait here for your vehicle.`;
             stateChanged = true;
@@ -119,7 +144,21 @@ export class JourneyStateService {
           nextState.voicePrompt = `You are on board. Stay on until ${activeTransitLeg.alightingStop.name}.`;
           stateChanged = true;
         } else if (activeTransitLeg) {
-          nextState.activeInstruction = `Waiting at ${activeTransitLeg.boardingStop.name}. Confirm when on board.`;
+          const distToBoarding = this.calculateDistance(
+            location.latitude,
+            location.longitude,
+            activeTransitLeg.boardingStop.latitude,
+            activeTransitLeg.boardingStop.longitude
+          );
+
+          if (distToBoarding > BOARDING_STOP_THRESHOLD_METERS) {
+            nextState.currentState = "WALKING_TO_STOP";
+            nextState.activeInstruction = `Walk to ${activeTransitLeg.boardingStop.name} (${distToBoarding}m remaining).`;
+            nextState.voicePrompt = `Walk to ${activeTransitLeg.boardingStop.name}.`;
+            stateChanged = true;
+          } else {
+            nextState.activeInstruction = `Waiting at ${activeTransitLeg.boardingStop.name}. Confirm when on board.`;
+          }
         }
         break;
       }

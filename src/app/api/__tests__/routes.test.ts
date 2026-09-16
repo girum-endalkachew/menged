@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { POST as handleRoutesPost } from "../routes/route";
 import { POST as handleJourneyStatePost } from "../journey/state/route";
+import { RouterService } from "@/services/router";
 import { ActiveJourneyState, GPSLocation } from "@/types/navigation";
 import { Journey } from "@/types/journey";
 
@@ -106,8 +107,7 @@ describe("API Controllers Endpoints", () => {
     expect(json.data.stateChanged).toBe(true);
   });
 
-  test("P2-01 API Error Sanitization: HTTP 500 responses return safe generic messages without exposing DB details or stack traces", async () => {
-    // Pass malformed body that triggers a 500 handler exception
+  test("POST /api/routes returns HTTP 400 for malformed JSON string payload", async () => {
     const req = new Request("http://localhost:3000/api/routes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -115,13 +115,41 @@ describe("API Controllers Endpoints", () => {
     });
 
     const res = await handleRoutesPost(req);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
 
     const json = await res.json();
     expect(json.success).toBe(false);
-    expect(json.error).toBe("An internal server error occurred while processing route request.");
-    expect(json.error).not.toContain("DATABASE_URL");
-    expect(json.error).not.toContain("postgres");
-    expect(json.error).not.toContain("SELECT");
+    expect(json.error).toBe("Invalid JSON body payload");
+  });
+
+  test("P2-01 API Error Sanitization: Internal server errors return sanitized HTTP 500 without exposing credentials or stack traces", async () => {
+    const originalFindJourneys = RouterService.findJourneys;
+    RouterService.findJourneys = async () => {
+      throw new Error("DATABASE_URL=postgres://user:secret@db:5432/menged SELECT * FROM stops failed at /var/app/src/db.ts:42");
+    };
+
+    try {
+      const req = new Request("http://localhost:3000/api/routes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin: { latitude: 8.9983386, longitude: 38.7860596 },
+          destination: { latitude: 9.0365871, longitude: 38.7522029 },
+        }),
+      });
+
+      const res = await handleRoutesPost(req);
+      expect(res.status).toBe(500);
+
+      const json = await res.json();
+      expect(json.success).toBe(false);
+      expect(json.error).toBe("An internal server error occurred while processing route request.");
+      expect(json.error).not.toContain("DATABASE_URL");
+      expect(json.error).not.toContain("secret");
+      expect(json.error).not.toContain("postgres");
+      expect(json.error).not.toContain("SELECT");
+    } finally {
+      RouterService.findJourneys = originalFindJourneys;
+    }
   });
 });

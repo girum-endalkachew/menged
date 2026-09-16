@@ -264,4 +264,65 @@ describe("JourneyStateService FSM Transitions", () => {
     expect(state.currentState).toBe("ARRIVED");
     expect(state.currentLegIndex).toBe(4);
   });
+
+  test("Scenario 3 & 4: Early boarding confirmation while WALKING_TO_STOP is preserved upon reaching AT_STOP and when moving away", () => {
+    let state: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "WALKING_TO_STOP",
+      boardingConfirmed: true, // User confirms early while walking
+    };
+    // 1. Move far away (100m away from boarding stop)
+    const posFar: GPSLocation = { latitude: 8.9990, longitude: 38.7870, speed: 1.2, heading: null, accuracy: 5, timestamp: Date.now() };
+    let res = JourneyStateService.evaluateState(state, posFar, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("WALKING_TO_STOP");
+    expect(res.nextState.boardingConfirmed).toBe(true); // Confirmation preserved
+
+    // 2. Arrive at stop (within 35m)
+    const posAtStop: GPSLocation = { latitude: 8.9984, longitude: 38.7861, speed: 0.2, heading: null, accuracy: 5, timestamp: Date.now() };
+    res = JourneyStateService.evaluateState(res.nextState, posAtStop, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("AT_STOP");
+    expect(res.nextState.boardingConfirmed).toBe(true); // MUST NOT be reset to false!
+
+    // 3. Next tick while AT_STOP + boardingConfirmed=true -> TRANSIT_LEG
+    res = JourneyStateService.evaluateState(res.nextState, posAtStop, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("TRANSIT_LEG");
+  });
+
+  test("Scenario 4b: Moving away from stop while AT_STOP without confirmation transitions back to WALKING_TO_STOP", () => {
+    const state: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "AT_STOP",
+      boardingConfirmed: false,
+    };
+    const posAway: GPSLocation = { latitude: 8.9999, longitude: 38.7880, speed: 1.5, heading: null, accuracy: 5, timestamp: Date.now() };
+    const res = JourneyStateService.evaluateState(state, posAway, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("WALKING_TO_STOP");
+    expect(res.stateChanged).toBe(true);
+  });
+
+  test("Scenario 9 & 10 & 11: Edge cases - Invalid leg index, missing leg, and malformed inputs", () => {
+    const stateWithNegativeIndex: ActiveJourneyState = {
+      ...createInitialState(),
+      currentLegIndex: -5,
+    };
+    const pos: GPSLocation = { latitude: 8.9983, longitude: 38.7860, speed: 1.0, heading: null, accuracy: 5, timestamp: Date.now() };
+    const res = JourneyStateService.evaluateState(stateWithNegativeIndex, pos, testJourneyFixture);
+    expect(res.nextState.currentLegIndex).toBe(0);
+
+    const stateWithOutOfBoundsIndex: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "WALKING_TO_STOP",
+      currentLegIndex: 99,
+    };
+    const resBounds = JourneyStateService.evaluateState(stateWithOutOfBoundsIndex, pos, testJourneyFixture);
+    expect(resBounds.nextState.currentLegIndex).toBe(testJourneyFixture.legs.length - 1);
+
+    expect(() => {
+      JourneyStateService.evaluateState(null as any, pos, testJourneyFixture);
+    }).toThrow("Invalid activeState");
+
+    expect(() => {
+      JourneyStateService.evaluateState(createInitialState(), pos, null as any);
+    }).toThrow("Invalid journey");
+  });
 });

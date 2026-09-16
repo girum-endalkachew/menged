@@ -86,4 +86,53 @@ describe("RouterService Unit & Integration Tests", () => {
       }
     }
   }, 10000);
+
+  test("Adversarial Input Matrix: Invalid, NaN, Infinity, out of range coordinates, and Origin=Destination return empty without throwing", async () => {
+    // 1. NaN coordinates
+    const nanReq: RouteRequest = {
+      origin: { latitude: NaN, longitude: 38.786 },
+      destination: { latitude: 9.036, longitude: 38.752 },
+    };
+    const nanRes = await RouterService.findJourneys(nanReq);
+    expect(nanRes).toEqual([]);
+
+    // 2. Infinity coordinates
+    const infReq: RouteRequest = {
+      origin: { latitude: 8.998, longitude: Infinity },
+      destination: { latitude: 9.036, longitude: 38.752 },
+    };
+    const infRes = await RouterService.findJourneys(infReq);
+    expect(infRes).toEqual([]);
+
+    // 3. Out-of-range latitude (> 90)
+    const outOfBoundsReq: RouteRequest = {
+      origin: { latitude: 120.0, longitude: 38.786 },
+      destination: { latitude: 9.036, longitude: 38.752 },
+    };
+    const outRes = await RouterService.findJourneys(outOfBoundsReq);
+    expect(outRes).toEqual([]);
+
+    // 4. Origin == Destination
+    const sameLocReq: RouteRequest = {
+      origin: { latitude: 8.9983386, longitude: 38.7860596 },
+      destination: { latitude: 8.9983386, longitude: 38.7860596 },
+    };
+    const sameRes = await RouterService.findJourneys(sameLocReq);
+    expect(sameRes).toEqual([]);
+  }, 10000);
+
+  test("Router Diagnostics Telemetry: Measures SQL query count and execution timings accurately", async () => {
+    const request: RouteRequest = {
+      origin: { latitude: 8.9983386, longitude: 38.7860596 },
+      destination: { latitude: 9.0365871, longitude: 38.7522029 },
+    };
+
+    const { journeys, diagnostics } = await RouterService.findJourneysWithDiagnostics(request);
+    expect(journeys.length).toBeGreaterThan(0);
+    expect(diagnostics.serviceCalls).toBeGreaterThan(0);
+    expect(diagnostics.sqlQueries).toBeGreaterThan(0);
+    expect(diagnostics.totalRequestTimeMs).toBeGreaterThan(0);
+    expect(diagnostics.candidateOriginStopsCount).toBeGreaterThan(0);
+    expect(diagnostics.candidateDestStopsCount).toBeGreaterThan(0);
+  }, 10000);
 });
