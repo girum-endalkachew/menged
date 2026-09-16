@@ -11,41 +11,52 @@ interface MengedState {
   routes: RouteOption[];
   selectedRoute: RouteOption | null;
   language: "en" | "am";
-  
-  setIsListening: (listening: boolean) => void;
-  setTranscript: (text: string) => void;
-  setOrigin: (origin: string) => void;
-  setDestination: (destination: string) => void;
-  setLanguage: (lang: "en" | "am") => void;
-  setPreference: (pref: "cheapest" | "fastest" | "least_walking" | "balanced") => void;
-  setSelectedRoute: (route: RouteOption | null) => void;
+  view: "landing" | "planner" | "listening" | "understanding" | "results" | "detail";
+
+  setIsListening: (v: boolean) => void;
+  setTranscript: (v: string) => void;
+  setOrigin: (v: string) => void;
+  setDestination: (v: string) => void;
+  setBudget: (v: number | null) => void;
+  setLanguage: (v: "en" | "am") => void;
+  setView: (v: MengedState["view"]) => void;
+  setPreference: (v: "cheapest" | "fastest" | "least_walking" | "balanced") => void;
+  setSelectedRoute: (v: RouteOption | null) => void;
   filterRoutes: () => void;
 }
 
 export const useMengedStore = create<MengedState>((set, get) => ({
   isListening: false,
   transcript: "",
-  origin: "Bole",
-  destination: "Piassa",
+  origin: "",
+  destination: "",
   budgetETB: null,
-  preference: "cheapest",
+  preference: "balanced",
   routes: MOCK_ROUTES,
-  selectedRoute: MOCK_ROUTES[0],
-  language: "am",
+  selectedRoute: null,
+  language: "en",
+  view: "landing",
 
-  setIsListening: (listening) => set({ isListening: listening }),
+  setIsListening: (isListening) => set({ isListening }),
   setTranscript: (transcript) => set({ transcript }),
   setOrigin: (origin) => set({ origin }),
   setDestination: (destination) => set({ destination }),
+  setBudget: (budgetETB) => set({ budgetETB }),
   setLanguage: (language) => set({ language }),
+  setView: (view) => set({ view }),
   setPreference: (preference) => {
     set({ preference });
     get().filterRoutes();
   },
   setSelectedRoute: (selectedRoute) => set({ selectedRoute }),
   filterRoutes: () => {
-    const { preference } = get();
+    const { preference, budgetETB } = get();
     let sorted = [...MOCK_ROUTES];
+
+    if (budgetETB !== null) {
+      sorted = sorted.filter((r) => r.totalCostETB <= budgetETB);
+    }
+
     if (preference === "cheapest") {
       sorted.sort((a, b) => a.totalCostETB - b.totalCostETB);
     } else if (preference === "fastest") {
@@ -53,6 +64,7 @@ export const useMengedStore = create<MengedState>((set, get) => ({
     } else if (preference === "least_walking") {
       sorted.sort((a, b) => a.walkingMinutes - b.walkingMinutes);
     }
+
     set({ routes: sorted, selectedRoute: sorted[0] || null });
   },
 }));
