@@ -1,0 +1,1 @@
+CREATE INDEX "idx_stops_lat_lon" ON "stops" USING btree ("latitude","longitude");
