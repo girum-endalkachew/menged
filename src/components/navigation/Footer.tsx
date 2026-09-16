@@ -5,24 +5,26 @@ import { Compass, Code2 } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer className="py-12 px-6 border-t border-[#D9DED8] dark:border-[#315047] max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-[#6E7772] dark:text-[#A8B5AE]">
+    <footer className="py-10 px-6 border-t border-[#E4E7E5] max-w-[1200px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-[#66736D] bg-[#FAF9F6]">
       <div className="flex items-center gap-2">
-        <Compass className="w-4 h-4 text-[#C99A3D]" />
-        <span className="font-medium text-[#17332D] dark:text-[#F4F0E6]">Menged (መንገድ)</span>
-        <span>— Your Voice Knows the Way</span>
+        <div className="w-6 h-6 rounded bg-[#123C2F] text-white flex items-center justify-center">
+          <Compass className="w-3.5 h-3.5" />
+        </div>
+        <span className="font-semibold text-[#17231F]">Menged (መንገድ)</span>
+        <span className="text-[#9AA49F]">— Your Voice Knows the Way</span>
       </div>
 
-      <div className="flex items-center gap-6 font-mono text-[11px]">
+      <div className="flex items-center gap-6 font-mono text-[10px] tracking-wider uppercase">
         <span>Stark Official Hackathon</span>
-        <span>•</span>
+        <span className="text-[#D9DED8]">•</span>
         <a
           href="https://github.com/girum-endalkachew/menged"
           target="_blank"
           rel="noopener noreferrer"
-          className="hover:text-[#17332D] dark:hover:text-[#F4F0E6] transition-colors flex items-center gap-1 text-inherit no-underline"
+          className="hover:text-[#123C2F] transition-colors flex items-center gap-1.5 text-inherit no-underline font-semibold"
         >
-          <Code2 className="w-3.5 h-3.5 text-[#C99A3D]" />
-          <span>girum-endalkachew/menged</span>
+          <Code2 className="w-3.5 h-3.5 text-[#E7B84B]" />
+          <span>girum/menged</span>
         </a>
       </div>
     </footer>
