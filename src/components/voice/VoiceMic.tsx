@@ -1,20 +1,20 @@
 ﻿"use client";
 
 import React, { useState, useEffect } from "react";
-import { Mic, MicOff, Volume2, Sparkles } from "lucide-react";
+import { Mic, Volume2, Sparkles } from "lucide-react";
 import { useMengedStore } from "@/store/useMengedStore";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export default function VoiceMic() {
-  const { 
-    isListening, 
-    setIsListening, 
-    transcript, 
-    setTranscript, 
-    setOrigin, 
-    setDestination, 
-    setPreference 
+  const {
+    isListening,
+    setIsListening,
+    transcript,
+    setTranscript,
+    setOrigin,
+    setDestination,
+    setPreference
   } = useMengedStore();
 
   const [recognition, setRecognition] = useState<any>(null);
@@ -49,24 +49,27 @@ export default function VoiceMic() {
     }
   }, []);
 
+  // NOTE: this is a placeholder browser-SpeechRecognition + keyword-match
+  // implementation, NOT the Voxide voice pipeline from the spec
+  // (VOICE -> TRANSCRIPTION -> INTENT -> VALIDATION -> DETERMINISTIC SYSTEM -> RESPONSE -> SPEECH).
+  // Keep this clearly labeled as a stub until the real integration lands.
   const parseVoiceIntent = (text: string) => {
     const lower = text.toLowerCase();
-    toast.success(`Heard: "${text}"`, { icon: "🎙️" });
+    toast.success(`Heard: "${text}"`);
 
-    // Extraction Engine
     if (lower.includes("bole")) setOrigin("Bole");
     if (lower.includes("piassa") || lower.includes("pyassa")) setDestination("Piassa");
     if (lower.includes("mexico")) setDestination("Mexico");
 
     if (lower.includes("cheapest") || lower.includes("cheap") || lower.includes("birr")) {
       setPreference("cheapest");
-      toast.success("Preference set to: Cheapest Option", { icon: "💰" });
+      toast.success("Preference set to: Cheapest");
     } else if (lower.includes("fastest") || lower.includes("fast") || lower.includes("quick")) {
       setPreference("fastest");
-      toast.success("Preference set to: Fastest Option", { icon: "⚡" });
-    } else if (lower.includes("walk") || lower.includes("lazy")) {
+      toast.success("Preference set to: Fastest");
+    } else if (lower.includes("walk") || lower.includes("less walking")) {
       setPreference("least_walking");
-      toast.success("Preference set to: Least Walking", { icon: "🚶" });
+      toast.success("Preference set to: Least Walking");
     }
   };
 
@@ -83,49 +86,51 @@ export default function VoiceMic() {
   };
 
   return (
-    <div className="w-full bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-6 flex flex-col items-center justify-between shadow-2xl relative overflow-hidden">
-      {/* Decorative Glow background */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="w-full bg-surface border border-border rounded-2xl p-6 flex flex-col items-center justify-between shadow-sm relative overflow-hidden">
       <div className="flex items-center justify-between w-full mb-4">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-emerald-400 animate-pulse" />
-          <span className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Voice Commander</span>
+          <Sparkles className="w-5 h-5 text-brand-green" />
+          <span className="text-xs font-semibold uppercase tracking-widest text-text-secondary">
+            Voice
+          </span>
         </div>
-        <div className="flex items-center gap-1.5 bg-zinc-950 px-3 py-1 rounded-full border border-zinc-800">
-          <span className={`w-2 h-2 rounded-full ${isListening ? "bg-emerald-500 animate-ping" : "bg-zinc-600"}`} />
-          <span className="text-[10px] font-mono text-zinc-400">{isListening ? "LIVE FEED" : "STANDBY"}</span>
+        <div className="flex items-center gap-1.5 bg-surface-soft px-3 py-1 rounded-full border border-border">
+          <span className={`w-2 h-2 rounded-full ${isListening ? "bg-brand-green animate-pulse" : "bg-text-muted"}`} />
+          <span className="text-[10px] font-mono text-text-secondary">
+            {isListening ? "LISTENING" : "STANDBY"}
+          </span>
         </div>
       </div>
 
       <div className="relative flex flex-col items-center my-6">
-        {/* Pulsating Ring */}
-        <div className={`absolute inset-0 rounded-full bg-emerald-500/10 blur-xl transition-all duration-500 scale-125 ${isListening ? "animate-pulse scale-150" : "opacity-0"}`} />
-        
+        <div
+          className={`absolute inset-0 rounded-full bg-brand-green/10 blur-xl transition-all duration-500 scale-125 ${
+            isListening ? "animate-pulse scale-150" : "opacity-0"
+          }`}
+        />
+
         <Button
           onClick={toggleListening}
           className={`h-24 w-24 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-            isListening 
-              ? "bg-emerald-500 hover:bg-emerald-600 border-emerald-400/50 shadow-emerald-500/30 shadow-2xl scale-105" 
-              : "bg-zinc-950 hover:bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-100"
+            isListening
+              ? "bg-brand-green hover:bg-brand-green/90 border-brand-green/50 shadow-lg scale-105"
+              : "bg-brand-forest hover:bg-brand-forest/90 border-transparent text-white"
           }`}
         >
           {isListening ? (
-            <Volume2 className="h-10 w-10 text-black animate-bounce" />
+            <Volume2 className="h-10 w-10 text-white animate-bounce" />
           ) : (
-            <Mic className="h-10 w-10 text-emerald-400 group-hover:scale-110 transition-transform" />
+            <Mic className="h-10 w-10 text-white" />
           )}
         </Button>
       </div>
 
-      {/* Dynamic Sound waves */}
       {isListening && (
         <div className="flex items-center gap-1 h-8 my-3">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((bar) => (
             <div
               key={bar}
-              className="w-1 bg-emerald-400 rounded-full transition-all duration-150"
+              className="w-1 bg-brand-green rounded-full transition-all duration-150"
               style={{
                 height: `${Math.floor(Math.random() * 24) + 6}px`,
                 animation: `bounce 0.8s ease-in-out infinite alternate`,
@@ -136,9 +141,8 @@ export default function VoiceMic() {
         </div>
       )}
 
-      {/* Transcript Textbox */}
       <div className="w-full mt-2 text-center">
-        <p className="text-sm font-medium text-zinc-300 min-h-[40px] italic">
+        <p className="text-sm font-medium text-text-secondary min-h-[40px] italic">
           {transcript ? `"${transcript}"` : `Try saying: "Take me from Bole to Piassa, cheapest options"`}
         </p>
       </div>
