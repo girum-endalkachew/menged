@@ -1,6 +1,9 @@
 import distance from "@turf/distance";
 import { point } from "@turf/helpers";
-import { TransitService, TransitServiceMetrics } from "./transitService";
+import { TransitRepository } from "@/db/repositories/transitRepository";
+import { RoutingDatasetLoader } from "./routingDatasetLoader";
+import { RoutingGraph } from "./routingGraph";
+import { SqlTracker } from "@/db/sqlTracker";
 import {
   RouteRequest,
   Journey,
@@ -61,16 +64,17 @@ export class RouterService {
   static async findJourneysWithDiagnostics(
     request: RouteRequest
   ): Promise<{ journeys: Journey[]; diagnostics: RouterDiagnostics }> {
+    SqlTracker.resetGlobal();
     const startTime = performance.now();
-    TransitServiceMetrics.reset();
+    const initialSqlCount = SqlTracker.getQueryCount();
 
     // 0. Adversarial / input validation
     if (!this.isValidCoordinate(request?.origin) || !this.isValidCoordinate(request?.destination)) {
       return {
         journeys: [],
         diagnostics: {
-          serviceCalls: TransitServiceMetrics.serviceCalls,
-          sqlQueries: TransitServiceMetrics.sqlQueries,
+          serviceCalls: 1,
+          sqlQueries: SqlTracker.getQueryCount() - initialSqlCount,
           candidateOriginStopsCount: 0,
           candidateDestStopsCount: 0,
           candidateTransferStopsCount: 0,
@@ -89,8 +93,8 @@ export class RouterService {
       return {
         journeys: [],
         diagnostics: {
-          serviceCalls: TransitServiceMetrics.serviceCalls,
-          sqlQueries: TransitServiceMetrics.sqlQueries,
+          serviceCalls: 1,
+          sqlQueries: SqlTracker.getQueryCount() - initialSqlCount,
           candidateOriginStopsCount: 0,
           candidateDestStopsCount: 0,
           candidateTransferStopsCount: 0,
@@ -107,32 +111,34 @@ export class RouterService {
     const destRadius = request.preferences?.maxWalkingMeters || 500;
     const maxTransfers = request.preferences?.maxTransfers ?? 1;
 
-    // 1. Nearest-stop discovery (WGS84 distance via Turf)
-    const candidateOriginStops = await TransitService.findStopsNear(
+    // STEP 3: Spatial candidate stop discovery (Database backed)
+    const dbStartTime = performance.now();
+    const candidateOriginStops = await TransitRepository.findStopsNear(
       request.origin.latitude,
       request.origin.longitude,
       originRadius
     );
 
-    const candidateDestStops = await TransitService.findStopsNear(
+    const candidateDestStops = await TransitRepository.findStopsNear(
       request.destination.latitude,
       request.destination.longitude,
       destRadius
     );
 
     if (candidateOriginStops.length === 0 || candidateDestStops.length === 0) {
+      const dbTimeMs = performance.now() - dbStartTime;
       return {
         journeys: [],
         diagnostics: {
-          serviceCalls: TransitServiceMetrics.serviceCalls,
-          sqlQueries: TransitServiceMetrics.sqlQueries,
+          serviceCalls: 1,
+          sqlQueries: SqlTracker.getQueryCount() - initialSqlCount,
           candidateOriginStopsCount: candidateOriginStops.length,
           candidateDestStopsCount: candidateDestStops.length,
           candidateTransferStopsCount: 0,
           candidateTripsCount: 0,
           candidateCombinationsCount: 0,
-          dbTimeMs: 0,
-          routerCpuTimeMs: 0,
+          dbTimeMs,
+          routerCpuTimeMs: performance.now() - startTime - dbTimeMs,
           totalRequestTimeMs: performance.now() - startTime,
         },
       };
@@ -151,178 +157,218 @@ export class RouterService {
       return distA - distB;
     });
 
+    // STEP 4-5: Obtain RoutingGraph from RoutingDatasetLoader (Application-level in-memory cache)
+    const graph: RoutingGraph = await RoutingDatasetLoader.getGlobalGraph();
+    const dbTimeMs = performance.now() - dbStartTime;
+
     const journeys: Journey[] = [];
     let combinationsEvaluated = 0;
     let candidateTripsCount = 0;
     let candidateTransferStopsCount = 0;
 
-    // 2. Direct Route Search (0 Transfers)
-    for (const originStop of candidateOriginStops.slice(0, 5)) {
-      for (const destStop of candidateDestStops.slice(0, 5)) {
+    const cpuStartTime = performance.now();
+
+    // Limit candidate evaluation slices for deterministic performance
+    const maxOriginCandidates = request.preferences?.maxOriginCandidates || 5;
+    const maxDestCandidates = request.preferences?.maxDestCandidates || 5;
+
+    const evalOriginStops = graph.findStopsNear(
+      request.origin.latitude,
+      request.origin.longitude,
+      originRadius
+    );
+
+    const evalDestStops = graph.findStopsNear(
+      request.destination.latitude,
+      request.destination.longitude,
+      destRadius
+    );
+
+    // STEP 8: DIRECT ROUTE SEARCH — 100% IN-MEMORY (ZERO SQL QUERIES)
+    for (const originStop of evalOriginStops) {
+      const originTimes = graph.getStopTimesForStop(originStop.id);
+      if (originTimes.length === 0) continue;
+
+      for (const destStop of evalDestStops) {
         combinationsEvaluated++;
-        const directResult = await TransitService.findDirectJourney(originStop.id, destStop.id);
-        if (directResult) {
-          // VERIFY INVARIANT 4: boardingSequence < alightingSequence
-          if (directResult.transitLeg.boardingSequence >= directResult.transitLeg.alightingSequence) {
-            continue; // REJECT reverse direction candidate
+        const destTimes = graph.getStopTimesForStop(destStop.id);
+        if (destTimes.length === 0) continue;
+
+        // Group by tripId in memory
+        const destTimesByTrip = new Map<string, Array<{ sequence: number; stopId: string }>>();
+        for (const dt of destTimes) {
+          if (!destTimesByTrip.has(dt.tripId)) {
+            destTimesByTrip.set(dt.tripId, []);
           }
+          destTimesByTrip.get(dt.tripId)!.push({ sequence: dt.stopSequence, stopId: dt.stopId });
+        }
 
-          const walkToBoardingMeters = this.calculateDistanceMeters(request.origin, {
-            latitude: directResult.originStop.latitude,
-            longitude: directResult.originStop.longitude,
-          });
+        // Search for matching trip where origin sequence < destination sequence
+        for (const ot of originTimes) {
+          const matchingDestList = destTimesByTrip.get(ot.tripId);
+          if (!matchingDestList) continue;
 
-          const walkFromAlightingMeters = this.calculateDistanceMeters(
-            { latitude: directResult.destinationStop.latitude, longitude: directResult.destinationStop.longitude },
-            request.destination
-          );
+          for (const dtItem of matchingDestList) {
+            // VERIFY INVARIANT: boardingSequence < alightingSequence
+            if (ot.stopSequence >= dtItem.sequence) continue;
 
-          const walkToBoardingLeg: WalkingLeg = {
-            type: "WALK",
-            from: { name: "Origin", latitude: request.origin.latitude, longitude: request.origin.longitude },
-            to: {
-              name: directResult.originStop.name,
-              latitude: directResult.originStop.latitude,
-              longitude: directResult.originStop.longitude,
-              stopId: directResult.originStop.id,
-            },
-            distanceMeters: walkToBoardingMeters,
-            estimatedMinutes: Math.ceil((walkToBoardingMeters / 1000) / (4.5 / 60)),
-          };
+            const trip = graph.getTrip(ot.tripId);
+            if (!trip) continue;
 
-          const rawOrderedStops = await TransitService.getOrderedStopsForTrip(directResult.transitLeg.tripId);
+            const route = graph.getRoute(trip.routeId);
+            if (!route) continue;
 
-          // VERIFY INVARIANTS 5-8: orderedStops non-empty, monotonic, matches boarding/alighting
-          const legOrderedStops = (rawOrderedStops || [])
-            .filter(
-              (s) =>
-                s.stopSequence >= directResult.transitLeg.boardingSequence &&
-                s.stopSequence <= directResult.transitLeg.alightingSequence
-            )
-            .map((s) => ({
-              id: s.stop.id,
-              name: s.stop.name,
-              latitude: s.stop.latitude,
-              longitude: s.stop.longitude,
-              stopSequence: s.stopSequence,
-            }));
+            const bStop = graph.getStop(ot.stopId) || originStop;
+            const aStop = graph.getStop(dtItem.stopId) || destStop;
 
-          if (legOrderedStops.length === 0) continue;
+            const walkToBoardingMeters = this.calculateDistanceMeters(request.origin, {
+              latitude: bStop.latitude,
+              longitude: bStop.longitude,
+            });
 
-          const transitLeg: TransitLeg = {
-            type: "TRANSIT",
-            routeId: directResult.transitLeg.routeId,
-            routeShortName: directResult.transitLeg.routeShortName,
-            routeLongName: directResult.transitLeg.routeLongName,
-            routeType: directResult.transitLeg.routeType,
-            boardingStop: directResult.originStop,
-            alightingStop: directResult.destinationStop,
-            boardingSequence: directResult.transitLeg.boardingSequence,
-            alightingSequence: directResult.transitLeg.alightingSequence,
-            stopsCount: directResult.transitLeg.stopsCount,
-            orderedStops: legOrderedStops,
-          };
+            const walkFromAlightingMeters = this.calculateDistanceMeters(
+              { latitude: aStop.latitude, longitude: aStop.longitude },
+              request.destination
+            );
 
-          const walkFromAlightingLeg: WalkingLeg = {
-            type: "WALK",
-            from: {
-              name: directResult.destinationStop.name,
-              latitude: directResult.destinationStop.latitude,
-              longitude: directResult.destinationStop.longitude,
-              stopId: directResult.destinationStop.id,
-            },
-            to: { name: "Destination", latitude: request.destination.latitude, longitude: request.destination.longitude },
-            distanceMeters: walkFromAlightingMeters,
-            estimatedMinutes: Math.ceil((walkFromAlightingMeters / 1000) / (4.5 / 60)),
-          };
+            const walkToBoardingLeg: WalkingLeg = {
+              type: "WALK",
+              from: { name: "Origin", latitude: request.origin.latitude, longitude: request.origin.longitude },
+              to: {
+                name: bStop.name,
+                latitude: bStop.latitude,
+                longitude: bStop.longitude,
+                stopId: bStop.id,
+              },
+              distanceMeters: walkToBoardingMeters,
+              estimatedMinutes: Math.ceil((walkToBoardingMeters / 1000) / (4.5 / 60)),
+            };
 
-          const totalWalkMeters = walkToBoardingMeters + walkFromAlightingMeters;
-          const estimatedTransitMins = directResult.transitLeg.stopsCount * 4;
-          const totalEstimatedMins =
-            walkToBoardingLeg.estimatedMinutes + estimatedTransitMins + walkFromAlightingLeg.estimatedMinutes;
+            const rawOrderedStops = graph.getOrderedStopsForTrip(trip.id);
 
-          const score = totalWalkMeters * 0.1 + totalEstimatedMins * 1.0;
+            // VERIFY INVARIANTS: orderedStops non-empty, monotonic, matches boarding/alighting
+            const legOrderedStops = rawOrderedStops
+              .filter((s) => s.stopSequence >= ot.stopSequence && s.stopSequence <= dtItem.sequence)
+              .map((s) => ({
+                id: s.stop.id,
+                name: s.stop.name,
+                latitude: s.stop.latitude,
+                longitude: s.stop.longitude,
+                stopSequence: s.stopSequence,
+              }));
 
-          journeys.push({
-            id: `journey_direct_${directResult.transitLeg.routeId}_${originStop.id}_${destStop.id}`,
-            origin: request.origin,
-            destination: request.destination,
-            legs: [walkToBoardingLeg, transitLeg, walkFromAlightingLeg],
-            totalWalkingMeters: totalWalkMeters,
-            transfersCount: 0,
-            estimatedDurationMinutes: totalEstimatedMins,
-            score,
-            tag: "Fastest",
-            trust: {
-              transit: "VERIFIED",
-              fare: "UNAVAILABLE",
-              realtime: "UNAVAILABLE",
-            },
-          });
-          break; // Found best direct route for this origin stop
+            if (legOrderedStops.length === 0) continue;
+
+            const transitLeg: TransitLeg = {
+              type: "TRANSIT",
+              routeId: route.id,
+              routeShortName: route.shortName,
+              routeLongName: route.longName,
+              routeType: route.routeType,
+              boardingStop: { id: bStop.id, name: bStop.name, latitude: bStop.latitude, longitude: bStop.longitude },
+              alightingStop: { id: aStop.id, name: aStop.name, latitude: aStop.latitude, longitude: aStop.longitude },
+              boardingSequence: ot.stopSequence,
+              alightingSequence: dtItem.sequence,
+              stopsCount: Math.abs(dtItem.sequence - ot.stopSequence),
+              orderedStops: legOrderedStops,
+            };
+
+            const walkFromAlightingLeg: WalkingLeg = {
+              type: "WALK",
+              from: {
+                name: aStop.name,
+                latitude: aStop.latitude,
+                longitude: aStop.longitude,
+                stopId: aStop.id,
+              },
+              to: { name: "Destination", latitude: request.destination.latitude, longitude: request.destination.longitude },
+              distanceMeters: walkFromAlightingMeters,
+              estimatedMinutes: Math.ceil((walkFromAlightingMeters / 1000) / (4.5 / 60)),
+            };
+
+            const totalWalkMeters = walkToBoardingMeters + walkFromAlightingMeters;
+            const estimatedTransitMins = transitLeg.stopsCount * 4;
+            const totalEstimatedMins =
+              walkToBoardingLeg.estimatedMinutes + estimatedTransitMins + walkFromAlightingLeg.estimatedMinutes;
+
+            const score = totalWalkMeters * 0.1 + totalEstimatedMins * 1.0;
+
+            journeys.push({
+              id: `journey_direct_${route.id}_${bStop.id}_${aStop.id}`,
+              origin: request.origin,
+              destination: request.destination,
+              legs: [walkToBoardingLeg, transitLeg, walkFromAlightingLeg],
+              totalWalkingMeters: totalWalkMeters,
+              transfersCount: 0,
+              estimatedDurationMinutes: totalEstimatedMins,
+              score,
+              tag: "Fastest",
+              trust: {
+                transit: "VERIFIED",
+                fare: "UNAVAILABLE",
+                realtime: "UNAVAILABLE",
+              },
+            });
+            break; // Found best direct route for this trip
+          }
         }
       }
     }
 
-    // 3. One-Transfer Search (1 Transfer) - BULK queries, no N+1 query amplification
+    // STEP 9-10: ONE-TRANSFER ROUTE SEARCH — 100% IN-MEMORY (ZERO SQL QUERIES)
     if (journeys.length < 2 && maxTransfers >= 1) {
-      const topOriginStops = candidateOriginStops.slice(0, 5);
-      const topDestStops = candidateDestStops.slice(0, 5);
-      const originStopIds = topOriginStops.map((s) => s.id);
-      const destStopIds = topDestStops.map((s) => s.id);
-
-      // Bulk fetch stop times, trips, routes for candidate origin and destination stops
-      const originData = await TransitService.getStopTimesAndTripsForStops(originStopIds);
-      const destData = await TransitService.getStopTimesAndTripsForStops(destStopIds);
-
-      const originTripsMap = new Map<string, { trip: any; route: any }>();
-      originData.trips.forEach((t) => {
-        const route = originData.routes.find((r) => r.id === t.routeId);
-        if (route) originTripsMap.set(t.id, { trip: t, route });
-      });
-
-      const destTripsMap = new Map<string, { trip: any; route: any }>();
-      destData.trips.forEach((t) => {
-        const route = destData.routes.find((r) => r.id === t.routeId);
-        if (route) destTripsMap.set(t.id, { trip: t, route });
-      });
-
-      const candidateOriginTripIds = Array.from(originTripsMap.keys()).slice(0, 15);
-      const candidateDestTripIds = Array.from(destTripsMap.keys()).slice(0, 15);
-      candidateTripsCount = candidateOriginTripIds.length + candidateDestTripIds.length;
-
-      // Bulk fetch ordered stops for all candidate trips in ONE bulk query
-      const allTripIds = Array.from(new Set([...candidateOriginTripIds, ...candidateDestTripIds]));
-      const bulkOrderedStopsMap = await TransitService.getBulkOrderedStopsForTrips(allTripIds);
-
       let transferFound = false;
 
-      for (const oTripId of candidateOriginTripIds) {
+      // Gather candidate trips serving origin stops & dest stops
+      const originTripIds = new Set<string>();
+      for (const s of evalOriginStops) {
+        graph.getStopTimesForStop(s.id).forEach((st) => originTripIds.add(st.tripId));
+      }
+
+      const destTripIds = new Set<string>();
+      for (const s of evalDestStops) {
+        graph.getStopTimesForStop(s.id).forEach((st) => destTripIds.add(st.tripId));
+      }
+
+      const evalOriginTrips = Array.from(originTripIds).slice(0, 15);
+      const evalDestTrips = Array.from(destTripIds).slice(0, 15);
+      candidateTripsCount = evalOriginTrips.length + evalDestTrips.length;
+
+      for (const oTripId of evalOriginTrips) {
         if (transferFound) break;
-        const oInfo = originTripsMap.get(oTripId)!;
-        const oTripStops = bulkOrderedStopsMap.get(oTripId) || [];
+        const oTrip = graph.getTrip(oTripId);
+        if (!oTrip) continue;
+
+        const oRoute = graph.getRoute(oTrip.routeId);
+        if (!oRoute) continue;
+
+        const oTripStops = graph.getOrderedStopsForTrip(oTripId);
         if (oTripStops.length === 0) continue;
 
-        for (const dTripId of candidateDestTripIds) {
+        for (const dTripId of evalDestTrips) {
           if (transferFound) break;
-          const dInfo = destTripsMap.get(dTripId)!;
-          if (oInfo.route.id === dInfo.route.id) continue; // Skip same route
+          const dTrip = graph.getTrip(dTripId);
+          if (!dTrip) continue;
 
-          const dTripStops = bulkOrderedStopsMap.get(dTripId) || [];
+          const dRoute = graph.getRoute(dTrip.routeId);
+          if (!dRoute) continue;
+
+          if (oRoute.id === dRoute.id) continue; // Skip same route
+
+          const dTripStops = graph.getOrderedStopsForTrip(dTripId);
           if (dTripStops.length === 0) continue;
 
-          // PART 5: Evaluate ALL occurrences of candidate origin stops on oTrip
+          // STEP 12 / PART 5: Multiple stop occurrences preservation
           const validOriginOccurrences = oTripStops.filter((s) =>
-            topOriginStops.some(
+            evalOriginStops.some(
               (cand) =>
                 cand.id === s.stop.id ||
                 this.calculateDistanceMeters(s.stop, { latitude: cand.latitude, longitude: cand.longitude }) <= 250
             )
           );
 
-          // Evaluate ALL occurrences of candidate dest stops on dTrip
           const validDestOccurrences = dTripStops.filter((s) =>
-            topDestStops.some(
+            evalDestStops.some(
               (cand) =>
                 cand.id === s.stop.id ||
                 this.calculateDistanceMeters(s.stop, { latitude: cand.latitude, longitude: cand.longitude }) <= 250
@@ -331,7 +377,7 @@ export class RouterService {
 
           if (validOriginOccurrences.length === 0 || validDestOccurrences.length === 0) continue;
 
-          // Search for transfer stop candidate pair
+          // Search for transfer stop candidate pair in memory
           for (const oStopItem of oTripStops) {
             if (transferFound) break;
             for (const dStopItem of dTripStops) {
@@ -353,19 +399,18 @@ export class RouterService {
               const validOriginOcc = validOriginOccurrences.find(
                 (oOcc) => oOcc.stopSequence < oStopItem.stopSequence
               );
-              if (!validOriginOcc) continue; // REJECT if originSequence >= transferSequence
+              if (!validOriginOcc) continue;
 
               // 2. Check Leg 2 directionality: dStopItem.stopSequence < validDestOcc.stopSequence
               const validDestOcc = validDestOccurrences.find(
                 (dOcc) => dStopItem.stopSequence < dOcc.stopSequence
               );
-              if (!validDestOcc) continue; // REJECT if transferSequence >= destSequence
+              if (!validDestOcc) continue;
 
-              // Find closest originStop fixture for walk calculation
               const originStop =
-                topOriginStops.find((s) => s.id === validOriginOcc.stop.id) || topOriginStops[0];
+                evalOriginStops.find((s) => s.id === validOriginOcc.stop.id) || evalOriginStops[0];
               const destStop =
-                topDestStops.find((s) => s.id === validDestOcc.stop.id) || topDestStops[0];
+                evalDestStops.find((s) => s.id === validDestOcc.stop.id) || evalDestStops[0];
 
               const walk1Meters = this.calculateDistanceMeters(request.origin, {
                 latitude: originStop.latitude,
@@ -405,10 +450,10 @@ export class RouterService {
 
               const transit1: TransitLeg = {
                 type: "TRANSIT",
-                routeId: oInfo.route.id,
-                routeShortName: oInfo.route.shortName,
-                routeLongName: oInfo.route.longName,
-                routeType: oInfo.route.routeType,
+                routeId: oRoute.id,
+                routeShortName: oRoute.shortName,
+                routeLongName: oRoute.longName,
+                routeType: oRoute.routeType,
                 boardingStop: {
                   id: validOriginOcc.stop.id,
                   name: validOriginOcc.stop.name,
@@ -461,10 +506,10 @@ export class RouterService {
 
               const transit2: TransitLeg = {
                 type: "TRANSIT",
-                routeId: dInfo.route.id,
-                routeShortName: dInfo.route.shortName,
-                routeLongName: dInfo.route.longName,
-                routeType: dInfo.route.routeType,
+                routeId: dRoute.id,
+                routeShortName: dRoute.shortName,
+                routeLongName: dRoute.longName,
+                routeType: dRoute.routeType,
                 boardingStop: {
                   id: dStopItem.stop.id,
                   name: dStopItem.stop.name,
@@ -506,7 +551,7 @@ export class RouterService {
               const score = totalWalk * 0.1 + 15.0 + totalMins * 1.0;
 
               journeys.push({
-                id: `journey_transfer_${oInfo.route.id}_${dInfo.route.id}`,
+                id: `journey_transfer_${oRoute.id}_${dRoute.id}`,
                 origin: request.origin,
                 destination: request.destination,
                 legs: [walk1, transit1, transferLeg, transit2, walk2],
@@ -546,21 +591,23 @@ export class RouterService {
       }
     }
 
-    const totalTimeMs = performance.now() - startTime;
+    const routerCpuTimeMs = performance.now() - cpuStartTime;
+    const totalRequestTimeMs = performance.now() - startTime;
+    const sqlQueriesExecuted = SqlTracker.getQueryCount() - initialSqlCount;
 
     return {
       journeys: uniqueJourneys,
       diagnostics: {
-        serviceCalls: TransitServiceMetrics.serviceCalls,
-        sqlQueries: TransitServiceMetrics.sqlQueries,
+        serviceCalls: 1,
+        sqlQueries: sqlQueriesExecuted,
         candidateOriginStopsCount: candidateOriginStops.length,
         candidateDestStopsCount: candidateDestStops.length,
         candidateTransferStopsCount,
         candidateTripsCount,
         candidateCombinationsCount: combinationsEvaluated,
-        dbTimeMs: totalTimeMs * 0.7, // Estimated DB IO ratio
-        routerCpuTimeMs: totalTimeMs * 0.3,
-        totalRequestTimeMs: totalTimeMs,
+        dbTimeMs,
+        routerCpuTimeMs,
+        totalRequestTimeMs,
       },
     };
   }

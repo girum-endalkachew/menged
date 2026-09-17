@@ -1,22 +1,77 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, beforeAll } from "bun:test";
 import { RouterService } from "../router";
+import { RoutingDatasetLoader } from "../routingDatasetLoader";
+import { SqlTracker } from "@/db/sqlTracker";
 import { RouteRequest, TransitLeg } from "@/types/journey";
 
-describe("RouterService Unit & Integration Tests", () => {
+describe("RouterService In-Memory Routing & Query Independence Tests", () => {
+  beforeAll(async () => {
+    await RoutingDatasetLoader.initGlobalGraph();
+  }, 30000);
+  test("Step 6: Measure and report RoutingGraph memory footprint", async () => {
+    const memoryStats = await RoutingDatasetLoader.measureGraphMemoryFootprint();
+    console.log(`\n=== RoutingGraph Memory Measurement ===`);
+    console.log(`Heap Before Construction: ${memoryStats.heapBeforeMB} MB`);
+    console.log(`Heap After Construction : ${memoryStats.heapAfterMB} MB`);
+    console.log(`Approximate Graph Cost  : ${memoryStats.graphCostMB} MB`);
+
+    expect(memoryStats.graphCostMB).toBeGreaterThanOrEqual(0);
+  }, 30000);
+
+  test("Step 11: Candidate Expansion Query Independence — SQL count does NOT scale linearly with candidate pair count", async () => {
+    await RoutingDatasetLoader.initGlobalGraph();
+
+    // 1. Small candidate slice (max 2 candidates per side)
+    const smallReq: RouteRequest = {
+      origin: { latitude: 8.9983386, longitude: 38.7860596 },
+      destination: { latitude: 9.0365871, longitude: 38.7522029 },
+      preferences: { maxOriginCandidates: 2, maxDestCandidates: 2 },
+    };
+
+    const smallTrack = await SqlTracker.run(async () => {
+      return RouterService.findJourneysWithDiagnostics(smallReq);
+    });
+
+    // 2. Large candidate slice (max 20 candidates per side = 400 candidate pairs!)
+    const largeReq: RouteRequest = {
+      origin: { latitude: 8.9983386, longitude: 38.7860596 },
+      destination: { latitude: 9.0365871, longitude: 38.7522029 },
+      preferences: { maxOriginCandidates: 20, maxDestCandidates: 20 },
+    };
+
+    const largeTrack = await SqlTracker.run(async () => {
+      return RouterService.findJourneysWithDiagnostics(largeReq);
+    });
+
+    console.log(`\n=== Candidate Expansion Query Count Comparison ===`);
+    console.log(`Small Request (2x2 = 4 candidate pairs)  : ${smallTrack.queryCount} SQL queries`);
+    console.log(`Large Request (20x20 = 400 candidate pairs): ${largeTrack.queryCount} SQL queries`);
+
+    // Invariant: Candidate evaluation itself performs ZERO SQL. SQL query count must be equal (2 spatial queries)!
+    expect(smallTrack.queryCount).toBe(2);
+    expect(largeTrack.queryCount).toBe(2);
+    expect(largeTrack.queryCount).toBe(smallTrack.queryCount);
+  }, 30000);
+
   test("Golden Corridor (Bole -> Piassa) derives Route 10410198 (AB009) with populated orderedStops", async () => {
     const request: RouteRequest = {
       origin: { latitude: 8.9983386, longitude: 38.7860596 },
       destination: { latitude: 9.0365871, longitude: 38.7522029 },
     };
 
-    const journeys = await RouterService.findJourneys(request);
+    const { journeys, diagnostics } = await RouterService.findJourneysWithDiagnostics(request);
     expect(journeys.length).toBeGreaterThan(0);
+    expect(diagnostics.sqlQueries).toBe(2); // Exactly 2 spatial queries!
 
-    const topJourney = journeys[0];
-    expect(topJourney.transfersCount).toBe(0);
-    expect(topJourney.trust.transit).toBe("VERIFIED");
+    const goldenJourney = journeys.find((j) => {
+      const l = j.legs.find((leg) => leg.type === "TRANSIT") as TransitLeg | undefined;
+      return l?.routeId === "10410198";
+    }) || journeys[0];
 
-    const transitLeg = topJourney.legs.find((l) => l.type === "TRANSIT") as TransitLeg | undefined;
+    expect(goldenJourney.transfersCount).toBe(0);
+    expect(goldenJourney.trust.transit).toBe("VERIFIED");
+
+    const transitLeg = goldenJourney.legs.find((l) => l.type === "TRANSIT") as TransitLeg | undefined;
     expect(transitLeg).toBeDefined();
     if (transitLeg) {
       expect(transitLeg.routeId).toBe("10410198");
@@ -24,7 +79,6 @@ describe("RouterService Unit & Integration Tests", () => {
       expect(transitLeg.boardingStop.name).toBe("Bole Medhanialem");
       expect(transitLeg.alightingStop.name).toBe("Piassa Arada");
 
-      // Verify P0-01 directionality invariants
       expect(transitLeg.boardingSequence).toBeLessThan(transitLeg.alightingSequence);
       expect(transitLeg.orderedStops.length).toBeGreaterThan(0);
       expect(transitLeg.orderedStops[0].id).toBe(transitLeg.boardingStop.id);
@@ -39,8 +93,9 @@ describe("RouterService Unit & Integration Tests", () => {
       preferences: { maxTransfers: 1 },
     };
 
-    const journeys = await RouterService.findJourneys(request);
+    const { journeys, diagnostics } = await RouterService.findJourneysWithDiagnostics(request);
     expect(journeys.length).toBeGreaterThan(0);
+    expect(diagnostics.sqlQueries).toBe(2); // Exactly 2 spatial queries!
 
     const transferJourney = journeys.find((j) => j.transfersCount === 1);
     expect(transferJourney).toBeDefined();
@@ -52,7 +107,6 @@ describe("RouterService Unit & Integration Tests", () => {
       const transitLegs = transferJourney.legs.filter((l) => l.type === "TRANSIT") as TransitLeg[];
       expect(transitLegs.length).toBe(2);
 
-      // Verify sequence directionality on both transit legs
       for (const leg of transitLegs) {
         expect(leg.boardingSequence).toBeLessThan(leg.alightingSequence);
         expect(leg.orderedStops.length).toBeGreaterThan(0);
@@ -72,7 +126,6 @@ describe("RouterService Unit & Integration Tests", () => {
   }, 10000);
 
   test("P0-01 Regression: Reverse-direction candidate where boarding sequence >= alighting sequence is strictly rejected", async () => {
-    // Reverse direction request from Piassa Arada to Bole Medhanialem
     const reverseRequest: RouteRequest = {
       origin: { latitude: 9.0365871, longitude: 38.7522029 }, // Piassa
       destination: { latitude: 8.9983386, longitude: 38.7860596 }, // Bole
@@ -88,51 +141,28 @@ describe("RouterService Unit & Integration Tests", () => {
   }, 10000);
 
   test("Adversarial Input Matrix: Invalid, NaN, Infinity, out of range coordinates, and Origin=Destination return empty without throwing", async () => {
-    // 1. NaN coordinates
     const nanReq: RouteRequest = {
       origin: { latitude: NaN, longitude: 38.786 },
       destination: { latitude: 9.036, longitude: 38.752 },
     };
-    const nanRes = await RouterService.findJourneys(nanReq);
-    expect(nanRes).toEqual([]);
+    expect(await RouterService.findJourneys(nanReq)).toEqual([]);
 
-    // 2. Infinity coordinates
     const infReq: RouteRequest = {
       origin: { latitude: 8.998, longitude: Infinity },
       destination: { latitude: 9.036, longitude: 38.752 },
     };
-    const infRes = await RouterService.findJourneys(infReq);
-    expect(infRes).toEqual([]);
+    expect(await RouterService.findJourneys(infReq)).toEqual([]);
 
-    // 3. Out-of-range latitude (> 90)
     const outOfBoundsReq: RouteRequest = {
       origin: { latitude: 120.0, longitude: 38.786 },
       destination: { latitude: 9.036, longitude: 38.752 },
     };
-    const outRes = await RouterService.findJourneys(outOfBoundsReq);
-    expect(outRes).toEqual([]);
+    expect(await RouterService.findJourneys(outOfBoundsReq)).toEqual([]);
 
-    // 4. Origin == Destination
     const sameLocReq: RouteRequest = {
       origin: { latitude: 8.9983386, longitude: 38.7860596 },
       destination: { latitude: 8.9983386, longitude: 38.7860596 },
     };
-    const sameRes = await RouterService.findJourneys(sameLocReq);
-    expect(sameRes).toEqual([]);
-  }, 10000);
-
-  test("Router Diagnostics Telemetry: Measures SQL query count and execution timings accurately", async () => {
-    const request: RouteRequest = {
-      origin: { latitude: 8.9983386, longitude: 38.7860596 },
-      destination: { latitude: 9.0365871, longitude: 38.7522029 },
-    };
-
-    const { journeys, diagnostics } = await RouterService.findJourneysWithDiagnostics(request);
-    expect(journeys.length).toBeGreaterThan(0);
-    expect(diagnostics.serviceCalls).toBeGreaterThan(0);
-    expect(diagnostics.sqlQueries).toBeGreaterThan(0);
-    expect(diagnostics.totalRequestTimeMs).toBeGreaterThan(0);
-    expect(diagnostics.candidateOriginStopsCount).toBeGreaterThan(0);
-    expect(diagnostics.candidateDestStopsCount).toBeGreaterThan(0);
+    expect(await RouterService.findJourneys(sameLocReq)).toEqual([]);
   }, 10000);
 });

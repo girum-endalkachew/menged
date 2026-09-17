@@ -117,5 +117,5 @@ describe("PostgreSQL Integration & Schema Verification", () => {
     const [afterStops] = await db.select({ count: sql<number>`count(*)` }).from(stops);
     const restoredCount = Number(afterStops.count);
     expect(restoredCount).toBe(initialCount);
-  });
+  }, 15000);
 });

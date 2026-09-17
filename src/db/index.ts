@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import { sqlQueryTracker } from "./sqlTracker";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -19,7 +20,7 @@ export const client =
   globalForDb.postgresClient ??
   postgres(connectionString, {
     max: 10,
-    idle_timeout: 20,
+    idle_timeout: 1,
     connect_timeout: 10,
     prepare: false,
   });
@@ -28,4 +29,4 @@ if (process.env.NODE_ENV !== "production") {
   globalForDb.postgresClient = client;
 }
 
-export const db = drizzle(client, { schema });
+export const db = drizzle(client, { schema, logger: sqlQueryTracker });
