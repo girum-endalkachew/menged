@@ -5,20 +5,41 @@ import { TransitStopData } from "./transitService";
 export interface GraphMemoryStats {
   heapBeforeMB: number;
   heapAfterMB: number;
-  graphCostMB: number;
+  measuredHeapDeltaMB: number;
+  estimatedRetainedMB: number;
+  measurementType: "runtime_heap_sample_and_estimate";
+  notes: string;
 }
 
 export class RoutingDatasetLoader {
   private static globalGraph: RoutingGraph | null = null;
+  private static initPromise: Promise<RoutingGraph> | null = null;
 
   /**
-   * Explicit initialization of application-level cached RoutingGraph
+   * Single-flight initialization of application-level cached RoutingGraph.
+   * Guarantees only one DB dataset load occurs when concurrent cold requests arrive.
    */
   static async initGlobalGraph(): Promise<RoutingGraph> {
     if (this.globalGraph) {
       return this.globalGraph;
     }
-    return this.reloadGlobalGraph();
+
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    const currentPromise = (async () => {
+      try {
+        return await this.reloadGlobalGraph();
+      } finally {
+        if (this.initPromise === currentPromise) {
+          this.initPromise = null;
+        }
+      }
+    })();
+
+    this.initPromise = currentPromise;
+    return currentPromise;
   }
 
   /**
@@ -44,16 +65,17 @@ export class RoutingDatasetLoader {
    */
   static clearGlobalGraph(): void {
     this.globalGraph = null;
+    this.initPromise = null;
   }
 
   /**
-   * Get cached global graph instance (initializes if null)
+   * Get cached global graph instance (initializes if null via single-flight mechanism)
    */
   static async getGlobalGraph(): Promise<RoutingGraph> {
-    if (!this.globalGraph) {
-      return this.initGlobalGraph();
+    if (this.globalGraph) {
+      return this.globalGraph;
     }
-    return this.globalGraph;
+    return this.initGlobalGraph();
   }
 
   /**
@@ -85,20 +107,48 @@ export class RoutingDatasetLoader {
   }
 
   /**
-   * Measure heap memory footprint of constructing the RoutingGraph
+   * Measures runtime heap delta and calculates structural retained memory estimate.
+   * Note: JS runtimes (V8/Bun) heap delta includes GC noise and allocator pooling.
+   * This telemetry distinguishes empirical heap delta from structural size estimates.
    */
   static async measureGraphMemoryFootprint(): Promise<GraphMemoryStats> {
     const heapBefore = process.memoryUsage().heapUsed;
     const graph = await this.getGlobalGraph();
-    const heapAfter = process.memoryUsage().heapUsed;
 
-    // Measured heap cost of full GTFS RoutingGraph (2312 stops, 464 routes, 921 trips, 9389 stop_times)
-    const graphCostMB = 4.88;
+    if (typeof globalThis.gc === "function") {
+      try {
+        globalThis.gc();
+      } catch {
+        // GC optional
+      }
+    }
+
+    const heapAfter = process.memoryUsage().heapUsed;
+    const rawDelta = heapAfter - heapBefore;
+    const measuredHeapDeltaMB = Math.max(0, Math.round((rawDelta / (1024 * 1024)) * 100) / 100);
+
+    // Calculate structural retained size estimate based on GTFS object graph structures
+    const stopsCount = graph.stopsById.size;
+    const routesCount = graph.routesById.size;
+    const tripsCount = graph.tripsById.size;
+    const stopTimesCount = graph.stopTimesByStopId.size;
+
+    // Approximate memory footprint per object in JS Maps (V8 object + map entry overhead)
+    const estimatedBytes =
+      stopsCount * 350 +
+      routesCount * 300 +
+      tripsCount * 250 +
+      stopTimesCount * 250;
+
+    const estimatedRetainedMB = Math.round((estimatedBytes / (1024 * 1024)) * 100) / 100;
 
     return {
       heapBeforeMB: Math.round((heapBefore / (1024 * 1024)) * 100) / 100,
       heapAfterMB: Math.round((heapAfter / (1024 * 1024)) * 100) / 100,
-      graphCostMB,
+      measuredHeapDeltaMB,
+      estimatedRetainedMB,
+      measurementType: "runtime_heap_sample_and_estimate",
+      notes: "measuredHeapDeltaMB reflects runtime process heap delta; estimatedRetainedMB calculates structural JS Map overhead.",
     };
   }
 }

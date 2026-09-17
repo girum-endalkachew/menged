@@ -90,15 +90,6 @@ export class TransitService {
   }
 
   /**
-   * Get ordered stops for a trip
-   */
-  static async getOrderedStopsForTrip(tripId: string) {
-    TransitServiceMetrics.serviceCalls++;
-    const times = await TransitRepository.fetchBulkStopTimesForStops([]);
-    return times;
-  }
-
-  /**
    * Legacy Direct journey lookup helper
    */
   static async findDirectJourney(

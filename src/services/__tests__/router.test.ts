@@ -13,9 +13,35 @@ describe("RouterService In-Memory Routing & Query Independence Tests", () => {
     console.log(`\n=== RoutingGraph Memory Measurement ===`);
     console.log(`Heap Before Construction: ${memoryStats.heapBeforeMB} MB`);
     console.log(`Heap After Construction : ${memoryStats.heapAfterMB} MB`);
-    console.log(`Approximate Graph Cost  : ${memoryStats.graphCostMB} MB`);
+    console.log(`Measured Heap Delta     : ${memoryStats.measuredHeapDeltaMB} MB`);
+    console.log(`Estimated Retained Cost : ${memoryStats.estimatedRetainedMB} MB`);
 
-    expect(memoryStats.graphCostMB).toBeGreaterThanOrEqual(0);
+    expect(memoryStats.estimatedRetainedMB).toBeGreaterThan(0);
+    expect(memoryStats.measurementType).toBe("runtime_heap_sample_and_estimate");
+    expect(typeof memoryStats.notes).toBe("string");
+  }, 30000);
+
+  test("Single-Flight Graph Initialization: 10 concurrent cold requests execute only ONE DB load", async () => {
+    RoutingDatasetLoader.clearGlobalGraph();
+
+    const track = await SqlTracker.run(async () => {
+      const graphPromises = Array.from({ length: 10 }).map(() =>
+        RoutingDatasetLoader.initGlobalGraph()
+      );
+      return Promise.all(graphPromises);
+    });
+
+    const graphs = track.result;
+    expect(graphs.length).toBe(10);
+
+    // Verify all 10 callers received the EXACT SAME graph object reference
+    const firstGraph = graphs[0];
+    for (const g of graphs) {
+      expect(g).toBe(firstGraph);
+    }
+
+    // Verify exactly 4 SQL bulk queries occurred total, NOT 40 queries!
+    expect(track.queryCount).toBe(4);
   }, 30000);
 
   test("Step 11: Candidate Expansion Query Independence — SQL count does NOT scale linearly with candidate pair count", async () => {

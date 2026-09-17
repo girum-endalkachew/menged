@@ -118,7 +118,8 @@ async function main() {
   const memoryStats = await RoutingDatasetLoader.measureGraphMemoryFootprint();
   console.log(`Heap Before Construction: ${memoryStats.heapBeforeMB} MB`);
   console.log(`Heap After Construction : ${memoryStats.heapAfterMB} MB`);
-  console.log(`Measured Graph Cost     : ${memoryStats.graphCostMB} MB`);
+  console.log(`Measured Heap Delta     : ${memoryStats.measuredHeapDeltaMB} MB`);
+  console.log(`Estimated Retained Cost : ${memoryStats.estimatedRetainedMB} MB`);
 
   const levels = [1, 5, 10, 20, 50];
 
