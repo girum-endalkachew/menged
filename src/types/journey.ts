@@ -9,6 +9,8 @@ export interface RouteRequest {
   preferences?: {
     maxWalkingMeters?: number;
     maxTransfers?: number;
+    maxOriginCandidates?: number;
+    maxDestCandidates?: number;
   };
 }
 

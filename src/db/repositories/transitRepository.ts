@@ -14,9 +14,10 @@ export interface StopTimeRecord {
 export interface TripRecord {
   id: string;
   routeId: string;
-  serviceId: string;
-  headsign: string | null;
-  directionId: number | null;
+  serviceId?: string | null;
+  shapeId?: string | null;
+  headsign?: string | null;
+  directionId?: number | null;
 }
 
 export class TransitRepository {

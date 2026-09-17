@@ -1,69 +1,129 @@
-import Image from "next/image";
+﻿"use client";
 
-export default function Home() {
+import React from "react";
+import { useMengedStore } from "@/store/useMengedStore";
+import Navbar from "@/components/navigation/Navbar";
+import HeroSection from "@/components/landing/HeroSection";
+import FeaturesSection from "@/components/landing/FeaturesSection";
+import FareTransparencySection from "@/components/landing/FareTransparencySection";
+import Footer from "@/components/navigation/Footer";
+
+import Sidebar from "@/components/navigation/Sidebar";
+import BottomNavigation from "@/components/navigation/BottomNavigation";
+import HomeView from "@/components/views/HomeView";
+import JourneysView from "@/components/views/JourneysView";
+import SavedView from "@/components/views/SavedView";
+import ProfileView from "@/components/views/ProfileView";
+import VoiceMic from "@/components/voice/VoiceMic";
+import RouteSelector from "@/components/routes/RouteSelector";
+import MengedMap from "@/components/map/MengedMap";
+import JourneyCompanion from "@/components/journey/JourneyCompanion";
+import { ArrowLeft, SlidersHorizontal, Play } from "lucide-react";
+
+export default function Page() {
+  const {
+    view, setView, activeTab, journeyState, startJourney,
+    selectedRoute, preference, setPreference
+  } = useMengedStore();
+
+  if (view === "landing") {
+    return (
+      <div className="min-h-screen flex flex-col bg-surface-ivory">
+        <Navbar />
+        <main className="flex-1">
+          <HeroSection />
+          <FeaturesSection />
+          <FareTransparencySection />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  const isJourneyActive = journeyState !== "PLANNING" && journeyState !== "ROUTE_SELECTED";
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="min-h-screen flex bg-surface-ivory">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-h-screen">
+        <header className="p-4 border-b border-border flex justify-between items-center lg:hidden bg-surface">
+          <button
+            onClick={() => setView("landing")}
+            className="text-sm font-bold text-brand-forest bg-transparent border-none"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+            Menged መንገድ
+          </button>
+          <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">
+            Addis Transit
+          </span>
+        </header>
+
+        <main className="p-4 lg:p-6 max-w-7xl mx-auto w-full flex-1 mb-20 lg:mb-0">
+          {activeTab === "home" && <HomeView />}
+          {activeTab === "plan" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+              <div className="lg:col-span-5 space-y-6">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setView("landing")}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-brand-forest bg-transparent border-none p-0 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> <span>Back</span>
+                  </button>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-accent-gold font-bold">
+                    {isJourneyActive ? "Live Companion" : "Trip Planner"}
+                  </span>
+                </div>
+
+                {isJourneyActive ? (
+                  <JourneyCompanion />
+                ) : (
+                  <>
+                    <VoiceMic />
+                    <div className="rounded-2xl border border-border p-3.5 flex items-center justify-between bg-surface">
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-text-muted flex items-center gap-1.5 font-semibold">
+                        <SlidersHorizontal className="w-3.5 h-3.5" /> Pref
+                      </span>
+                      <div className="flex gap-1">
+                        {(["cheapest", "fastest", "least_walking", "balanced"] as const).map((pref) => (
+                          <button
+                            key={pref}
+                            onClick={() => setPreference(pref)}
+                            className={`text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition-all cursor-pointer border ${
+                              preference === pref
+                                ? "bg-brand-forest text-white border-brand-forest"
+                                : "bg-transparent border-transparent text-text-secondary hover:bg-surface-soft"
+                            }`}
+                          >
+                            {pref === "cheapest" ? "Cheapest" : pref === "fastest" ? "Fastest" : pref === "least_walking" ? "Less Walk" : "Balanced"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <RouteSelector />
+                    {selectedRoute && (
+                      <button
+                        onClick={startJourney}
+                        className="w-full py-3.5 text-sm uppercase tracking-widest font-bold rounded-xl bg-brand-forest text-white flex items-center justify-center gap-2 hover:bg-brand-green transition-colors cursor-pointer"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        <span>Start Journey</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="lg:col-span-7 h-[50vh] lg:h-[calc(100vh-6rem)] sticky top-6">
+                <MengedMap />
+              </div>
+            </div>
+          )}
+          {activeTab === "journeys" && <JourneysView />}
+          {activeTab === "saved" && <SavedView />}
+          {(activeTab === "profile" || activeTab === "settings" || activeTab === "notifications") && <ProfileView />}
+        </main>
+        <BottomNavigation />
+      </div>
     </div>
   );
 }

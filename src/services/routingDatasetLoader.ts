@@ -28,18 +28,29 @@ export class RoutingDatasetLoader {
       return this.initPromise;
     }
 
-    const currentPromise = (async () => {
-      try {
-        return await this.reloadGlobalGraph();
-      } finally {
-        if (this.initPromise === currentPromise) {
+    let resolvePromise!: (val: RoutingGraph) => void;
+    let rejectPromise!: (err: any) => void;
+    const promise = new Promise<RoutingGraph>((res, rej) => {
+      resolvePromise = res;
+      rejectPromise = rej;
+    });
+
+    this.initPromise = promise;
+
+    this.reloadGlobalGraph()
+      .then((g) => {
+        resolvePromise(g);
+      })
+      .catch((err) => {
+        rejectPromise(err);
+      })
+      .finally(() => {
+        if (this.initPromise === promise) {
           this.initPromise = null;
         }
-      }
-    })();
+      });
 
-    this.initPromise = currentPromise;
-    return currentPromise;
+    return promise;
   }
 
   /**
