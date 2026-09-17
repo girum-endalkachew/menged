@@ -64,7 +64,20 @@ export class RouterService {
   static async findJourneysWithDiagnostics(
     request: RouteRequest
   ): Promise<{ journeys: Journey[]; diagnostics: RouterDiagnostics }> {
-    SqlTracker.resetGlobal();
+    if (!SqlTracker.hasStore()) {
+      const trackerRes = await SqlTracker.run(async () => {
+        return this.internalFindJourneysWithDiagnostics(request);
+      });
+      trackerRes.result.diagnostics.sqlQueries = trackerRes.queryCount;
+      return trackerRes.result;
+    }
+
+    return this.internalFindJourneysWithDiagnostics(request);
+  }
+
+  private static async internalFindJourneysWithDiagnostics(
+    request: RouteRequest
+  ): Promise<{ journeys: Journey[]; diagnostics: RouterDiagnostics }> {
     const startTime = performance.now();
     const initialSqlCount = SqlTracker.getQueryCount();
 
@@ -168,21 +181,12 @@ export class RouterService {
 
     const cpuStartTime = performance.now();
 
-    // Limit candidate evaluation slices for deterministic performance
-    const maxOriginCandidates = request.preferences?.maxOriginCandidates || 5;
-    const maxDestCandidates = request.preferences?.maxDestCandidates || 5;
+    // Limit candidate evaluation slices for deterministic performance (distance-sorted)
+    const maxOriginCandidates = request.preferences?.maxOriginCandidates || 10;
+    const maxDestCandidates = request.preferences?.maxDestCandidates || 10;
 
-    const evalOriginStops = graph.findStopsNear(
-      request.origin.latitude,
-      request.origin.longitude,
-      originRadius
-    );
-
-    const evalDestStops = graph.findStopsNear(
-      request.destination.latitude,
-      request.destination.longitude,
-      destRadius
-    );
+    const evalOriginStops = candidateOriginStops.slice(0, maxOriginCandidates);
+    const evalDestStops = candidateDestStops.slice(0, maxDestCandidates);
 
     // STEP 8: DIRECT ROUTE SEARCH — 100% IN-MEMORY (ZERO SQL QUERIES)
     for (const originStop of evalOriginStops) {
@@ -244,20 +248,16 @@ export class RouterService {
               estimatedMinutes: Math.ceil((walkToBoardingMeters / 1000) / (4.5 / 60)),
             };
 
-            const rawOrderedStops = graph.getOrderedStopsForTrip(trip.id);
-
-            // VERIFY INVARIANTS: orderedStops non-empty, monotonic, matches boarding/alighting
-            const legOrderedStops = rawOrderedStops
-              .filter((s) => s.stopSequence >= ot.stopSequence && s.stopSequence <= dtItem.sequence)
-              .map((s) => ({
-                id: s.stop.id,
-                name: s.stop.name,
-                latitude: s.stop.latitude,
-                longitude: s.stop.longitude,
-                stopSequence: s.stopSequence,
+            const fullTripStops = graph.getOrderedStopsForTrip(ot.tripId);
+            const orderedStopsSlice = fullTripStops
+              .filter((st) => st.stopSequence >= ot.stopSequence && st.stopSequence <= dtItem.sequence)
+              .map((st) => ({
+                id: st.stop.id,
+                name: st.stop.name,
+                latitude: st.stop.latitude,
+                longitude: st.stop.longitude,
+                stopSequence: st.stopSequence,
               }));
-
-            if (legOrderedStops.length === 0) continue;
 
             const transitLeg: TransitLeg = {
               type: "TRANSIT",
@@ -265,12 +265,22 @@ export class RouterService {
               routeShortName: route.shortName,
               routeLongName: route.longName,
               routeType: route.routeType,
-              boardingStop: { id: bStop.id, name: bStop.name, latitude: bStop.latitude, longitude: bStop.longitude },
-              alightingStop: { id: aStop.id, name: aStop.name, latitude: aStop.latitude, longitude: aStop.longitude },
+              boardingStop: {
+                id: bStop.id,
+                name: bStop.name,
+                latitude: bStop.latitude,
+                longitude: bStop.longitude,
+              },
+              alightingStop: {
+                id: aStop.id,
+                name: aStop.name,
+                latitude: aStop.latitude,
+                longitude: aStop.longitude,
+              },
               boardingSequence: ot.stopSequence,
               alightingSequence: dtItem.sequence,
               stopsCount: Math.abs(dtItem.sequence - ot.stopSequence),
-              orderedStops: legOrderedStops,
+              orderedStops: orderedStopsSlice,
             };
 
             const walkFromAlightingLeg: WalkingLeg = {
@@ -317,7 +327,7 @@ export class RouterService {
 
     // STEP 9-10: ONE-TRANSFER ROUTE SEARCH — 100% IN-MEMORY (ZERO SQL QUERIES)
     if (journeys.length < 2 && maxTransfers >= 1) {
-      let transferFound = false;
+      const bestTransferByRoutePair = new Map<string, Journey>();
 
       // Gather candidate trips serving origin stops & dest stops
       const originTripIds = new Set<string>();
@@ -335,7 +345,6 @@ export class RouterService {
       candidateTripsCount = evalOriginTrips.length + evalDestTrips.length;
 
       for (const oTripId of evalOriginTrips) {
-        if (transferFound) break;
         const oTrip = graph.getTrip(oTripId);
         if (!oTrip) continue;
 
@@ -346,14 +355,13 @@ export class RouterService {
         if (oTripStops.length === 0) continue;
 
         for (const dTripId of evalDestTrips) {
-          if (transferFound) break;
           const dTrip = graph.getTrip(dTripId);
           if (!dTrip) continue;
 
           const dRoute = graph.getRoute(dTrip.routeId);
           if (!dRoute) continue;
 
-          if (oRoute.id === dRoute.id) continue; // Skip same route
+          if (String(oRoute.id) === String(dRoute.id)) continue; // Skip same route
 
           const dTripStops = graph.getOrderedStopsForTrip(dTripId);
           if (dTripStops.length === 0) continue;
@@ -379,7 +387,6 @@ export class RouterService {
 
           // Search for transfer stop candidate pair in memory
           for (const oStopItem of oTripStops) {
-            if (transferFound) break;
             for (const dStopItem of dTripStops) {
               combinationsEvaluated++;
 
@@ -550,7 +557,7 @@ export class RouterService {
                 walk2.estimatedMinutes;
               const score = totalWalk * 0.1 + 15.0 + totalMins * 1.0;
 
-              journeys.push({
+              const candidateJourney: Journey = {
                 id: `journey_transfer_${oRoute.id}_${dRoute.id}`,
                 origin: request.origin,
                 destination: request.destination,
@@ -565,17 +572,32 @@ export class RouterService {
                   fare: "UNAVAILABLE",
                   realtime: "UNAVAILABLE",
                 },
-              });
-              transferFound = true;
-              break;
+              };
+
+              const routePairKey = `${oRoute.id}_${dRoute.id}`;
+              const existingBest = bestTransferByRoutePair.get(routePairKey);
+              if (!existingBest || score < existingBest.score) {
+                bestTransferByRoutePair.set(routePairKey, candidateJourney);
+              }
             }
           }
         }
       }
+
+      // Collect top transfer options ranked by score
+      const rankedTransferJourneys = Array.from(bestTransferByRoutePair.values()).sort(
+        (a, b) => a.score - b.score
+      );
+      journeys.push(...rankedTransferJourneys);
     }
 
-    // Sort deterministically by score
-    journeys.sort((a, b) => a.score - b.score);
+    // Sort deterministically: direct journeys (0 transfers) come before 1-transfer journeys, then by score
+    journeys.sort((a, b) => {
+      if (a.transfersCount !== b.transfersCount) {
+        return a.transfersCount - b.transfersCount;
+      }
+      return a.score - b.score;
+    });
 
     // Deduplicate journeys by legs pattern
     const uniqueJourneys: Journey[] = [];

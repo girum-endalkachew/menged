@@ -171,10 +171,22 @@ export class JourneyStateService {
             activeTransitLeg.alightingStop.latitude,
             activeTransitLeg.alightingStop.longitude
           );
+          const distToBoarding = this.calculateDistance(
+            location.latitude,
+            location.longitude,
+            activeTransitLeg.boardingStop.latitude,
+            activeTransitLeg.boardingStop.longitude
+          );
 
           if (distToAlighting <= ALIGHTING_APPROACH_THRESHOLD_METERS) {
             nextState.currentState = "APPROACHING_ALIGHTING_STOP";
             nextState.activeInstruction = `${activeTransitLeg.alightingStop.name} is coming up in ${distToAlighting}m. Get ready to get off.`;
+            nextState.voicePrompt = `${activeTransitLeg.alightingStop.name} is coming up. Get ready to get off.`;
+            stateChanged = true;
+          } else if (distToBoarding > distToAlighting && distToAlighting <= 300) {
+            // Overshoot protection: GPS update jumped past 120m approach threshold but is within 300m past alighting stop
+            nextState.currentState = "APPROACHING_ALIGHTING_STOP";
+            nextState.activeInstruction = `${activeTransitLeg.alightingStop.name} is coming up. Get ready to get off.`;
             nextState.voicePrompt = `${activeTransitLeg.alightingStop.name} is coming up. Get ready to get off.`;
             stateChanged = true;
           } else {
@@ -192,8 +204,22 @@ export class JourneyStateService {
             activeTransitLeg.alightingStop.latitude,
             activeTransitLeg.alightingStop.longitude
           );
+          const distToBoarding = this.calculateDistance(
+            location.latitude,
+            location.longitude,
+            activeTransitLeg.boardingStop.latitude,
+            activeTransitLeg.boardingStop.longitude
+          );
 
           if (distToAlighting <= ALIGHTED_STOP_THRESHOLD_METERS) {
+            nextState.currentState = "ALIGHTED";
+            const nextLegIndex = activeLegIndex + 1;
+            nextState.currentLegIndex = nextLegIndex < journey.legs.length ? nextLegIndex : journey.legs.length - 1;
+            nextState.activeInstruction = `Get off at ${activeTransitLeg.alightingStop.name}.`;
+            nextState.voicePrompt = `Get off here at ${activeTransitLeg.alightingStop.name}.`;
+            stateChanged = true;
+          } else if (distToBoarding > distToAlighting && distToAlighting <= 300) {
+            // Overshoot protection: GPS update jumped past alighting stop (within 300m past stop)
             nextState.currentState = "ALIGHTED";
             const nextLegIndex = activeLegIndex + 1;
             nextState.currentLegIndex = nextLegIndex < journey.legs.length ? nextLegIndex : journey.legs.length - 1;

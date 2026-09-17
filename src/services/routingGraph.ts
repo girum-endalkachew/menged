@@ -92,22 +92,18 @@ export class RoutingGraph {
   }
 
   findStopsNear(lat: number, lon: number, radiusMeters = 500): TransitStopData[] {
-    const degreesPerMeter = 1 / 111000;
-    const maxDegreeDelta = radiusMeters * degreesPerMeter;
     const ptOrigin = point([lon, lat]);
+    const candidates: Array<{ stop: TransitStopData; distMeters: number }> = [];
 
-    const candidates: TransitStopData[] = [];
     for (const stop of this.stopsById.values()) {
-      const dLat = Math.abs(stop.latitude - lat);
-      const dLon = Math.abs(stop.longitude - lon);
-      if (dLat <= maxDegreeDelta && dLon <= maxDegreeDelta) {
-        const ptStop = point([stop.longitude, stop.latitude]);
-        const distKm = distance(ptOrigin, ptStop, { units: "kilometers" });
-        if (distKm * 1000 <= radiusMeters) {
-          candidates.push(stop);
-        }
+      const ptStop = point([stop.longitude, stop.latitude]);
+      const distMeters = distance(ptOrigin, ptStop, { units: "kilometers" }) * 1000;
+      if (distMeters <= radiusMeters) {
+        candidates.push({ stop, distMeters });
       }
     }
-    return candidates;
+
+    candidates.sort((a, b) => a.distMeters - b.distMeters);
+    return candidates.map((c) => c.stop);
   }
 }

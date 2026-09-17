@@ -325,4 +325,56 @@ describe("JourneyStateService FSM Transitions", () => {
       JourneyStateService.evaluateState(createInitialState(), pos, null as any);
     }).toThrow("Invalid journey");
   });
+
+  test("Finding 3 Regression: GPS jump past 120m threshold up to 300m does NOT trap user in TRANSIT_LEG", () => {
+    const stateInTransit: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "TRANSIT_LEG",
+      currentLegIndex: 1,
+      boardingConfirmed: true,
+    };
+
+    // Alighting stop is at (9.0365, 38.7522).
+    // GPS update jumps to 150m past alighting stop towards destination (9.0368, 38.7520).
+    const posJumpedPast: GPSLocation = {
+      latitude: 9.0368,
+      longitude: 38.7520,
+      speed: 6.0,
+      heading: 320,
+      accuracy: 5,
+      timestamp: Date.now(),
+    };
+
+    const res = JourneyStateService.evaluateState(stateInTransit, posJumpedPast, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("APPROACHING_ALIGHTING_STOP");
+    expect(res.stateChanged).toBe(true);
+
+    // Next tick advances to ALIGHTED
+    const res2 = JourneyStateService.evaluateState(res.nextState, posJumpedPast, testJourneyFixture);
+    expect(res2.nextState.currentState).toBe("ALIGHTED");
+    expect(res2.stateChanged).toBe(true);
+  });
+
+  test("Finding 3 Regression: Normal GPS jitter at 500m before stop does NOT falsely trigger alighting", () => {
+    const stateInTransit: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "TRANSIT_LEG",
+      currentLegIndex: 1,
+      boardingConfirmed: true,
+    };
+
+    // GPS location 500m away from alighting stop
+    const posJitter: GPSLocation = {
+      latitude: 9.0320,
+      longitude: 38.7550,
+      speed: 8.0,
+      heading: 300,
+      accuracy: 15,
+      timestamp: Date.now(),
+    };
+
+    const res = JourneyStateService.evaluateState(stateInTransit, posJitter, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("TRANSIT_LEG");
+    expect(res.stateChanged).toBe(false);
+  });
 });

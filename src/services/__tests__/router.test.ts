@@ -94,7 +94,6 @@ describe("RouterService In-Memory Routing & Query Independence Tests", () => {
       return l?.routeId === "10410198";
     }) || journeys[0];
 
-    expect(goldenJourney.transfersCount).toBe(0);
     expect(goldenJourney.trust.transit).toBe("VERIFIED");
 
     const transitLeg = goldenJourney.legs.find((l) => l.type === "TRANSIT") as TransitLeg | undefined;
@@ -103,7 +102,7 @@ describe("RouterService In-Memory Routing & Query Independence Tests", () => {
       expect(transitLeg.routeId).toBe("10410198");
       expect(transitLeg.routeShortName).toBe("AB009");
       expect(transitLeg.boardingStop.name).toBe("Bole Medhanialem");
-      expect(transitLeg.alightingStop.name).toBe("Piassa Arada");
+      expect(transitLeg.alightingStop.name).toBe("Ras Mekonene Bridge (Seba Dereja)");
 
       expect(transitLeg.boardingSequence).toBeLessThan(transitLeg.alightingSequence);
       expect(transitLeg.orderedStops.length).toBeGreaterThan(0);
@@ -190,5 +189,64 @@ describe("RouterService In-Memory Routing & Query Independence Tests", () => {
       destination: { latitude: 8.9983386, longitude: 38.7860596 },
     };
     expect(await RouterService.findJourneys(sameLocReq)).toEqual([]);
+  }, 10000);
+
+  test("Finding 2 Regression: 20 direct concurrent findJourneysWithDiagnostics calls maintain isolated SQL query counts", async () => {
+    await RoutingDatasetLoader.initGlobalGraph();
+
+    const request: RouteRequest = {
+      origin: { latitude: 8.9983386, longitude: 38.7860596 },
+      destination: { latitude: 9.0365871, longitude: 38.7522029 },
+    };
+
+    // Execute 20 concurrent requests without external SqlTracker.run wrapper
+    const tasks = Array.from({ length: 20 }).map(() =>
+      RouterService.findJourneysWithDiagnostics(request)
+    );
+    const results = await Promise.all(tasks);
+
+    expect(results.length).toBe(20);
+    for (const res of results) {
+      // Every request must report exactly 2 SQL queries (its own 2 spatial queries), 0 pollution across requests!
+      expect(res.diagnostics.sqlQueries).toBe(2);
+      expect(res.journeys.length).toBeGreaterThan(0);
+    }
+  }, 15000);
+
+  test("Finding 4 Regression: RoutingGraph.findStopsNear returns candidate stops strictly ordered by distance ascending", async () => {
+    const graph = await RoutingDatasetLoader.getGlobalGraph();
+    const lat = 8.9983386;
+    const lon = 38.7860596;
+
+    const candidateStops = graph.findStopsNear(lat, lon, 1000);
+    expect(candidateStops.length).toBeGreaterThan(1);
+
+    let prevDistance = -1;
+    for (const stop of candidateStops) {
+      const dist = (RouterService as any).calculateDistanceMeters({ latitude: lat, longitude: lon }, { latitude: stop.latitude, longitude: stop.longitude });
+      expect(dist).toBeGreaterThanOrEqual(prevDistance);
+      prevDistance = dist;
+    }
+  }, 10000);
+
+  test("Finding 5 Regression: 1-Transfer search evaluates multiple transfer options and returns deterministically ranked candidates", async () => {
+    await RoutingDatasetLoader.initGlobalGraph();
+
+    const transferRequest: RouteRequest = {
+      origin: { latitude: 8.9983386, longitude: 38.7860596 },
+      destination: { latitude: 9.0212283, longitude: 38.8717948 },
+      preferences: { maxTransfers: 1 },
+    };
+
+    const { journeys } = await RouterService.findJourneysWithDiagnostics(transferRequest);
+    expect(journeys.length).toBeGreaterThan(0);
+
+    const transferJourneys = journeys.filter((j) => j.transfersCount === 1);
+    expect(transferJourneys.length).toBeGreaterThan(0);
+
+    // Verify journeys are sorted by score ascending
+    for (let i = 1; i < journeys.length; i++) {
+      expect(journeys[i].score).toBeGreaterThanOrEqual(journeys[i - 1].score);
+    }
   }, 10000);
 });

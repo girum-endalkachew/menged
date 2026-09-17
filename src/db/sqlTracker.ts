@@ -55,6 +55,13 @@ export class SqlTracker {
   }
 
   /**
+   * Check if an isolated SQL tracking context is active
+   */
+  static hasStore(): boolean {
+    return asyncLocalStorage.getStore() !== undefined;
+  }
+
+  /**
    * Reset global query counter
    */
   static resetGlobal(): void {
