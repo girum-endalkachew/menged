@@ -30,6 +30,37 @@ export class JourneyStateService {
   }
 
   /**
+   * Calculates vector projection parameter t of point P (latP, lonP) onto line segment B (latB, lonB) -> A (latA, lonA).
+   * t = 0 at B, t = 1.0 at A. t > 1.0 means P is past A along the vector B -> A.
+   */
+  private static calculateVectorProjection(
+    latB: number,
+    lonB: number,
+    latA: number,
+    lonA: number,
+    latP: number,
+    lonP: number
+  ): number {
+    const latRad = (latB * Math.PI) / 180;
+    const cosLat = Math.cos(latRad);
+
+    const dLatV = latA - latB;
+    const dLonV = (lonA - lonB) * cosLat;
+
+    const dLatW = latP - latB;
+    const dLonW = (lonP - lonB) * cosLat;
+
+    const dotWV = dLatW * dLatV + dLonW * dLonV;
+    const dotVV = dLatV * dLatV + dLonV * dLonV;
+
+    if (dotVV <= 1e-12) {
+      return 0;
+    }
+
+    return dotWV / dotVV;
+  }
+
+  /**
    * Pure Domain Evaluator: Accepts active state, current GPS location, and Journey object,
    * returns updated state, stateChanged flag, and human guidance instructions.
    */
@@ -178,16 +209,58 @@ export class JourneyStateService {
             activeTransitLeg.boardingStop.longitude
           );
 
+          const t = this.calculateVectorProjection(
+            activeTransitLeg.boardingStop.latitude,
+            activeTransitLeg.boardingStop.longitude,
+            activeTransitLeg.alightingStop.latitude,
+            activeTransitLeg.alightingStop.longitude,
+            location.latitude,
+            location.longitude
+          );
+
+          let lastDistToAlighting: number | null = null;
+          if (activeState.lastLocation) {
+            lastDistToAlighting = this.calculateDistance(
+              activeState.lastLocation.latitude,
+              activeState.lastLocation.longitude,
+              activeTransitLeg.alightingStop.latitude,
+              activeTransitLeg.alightingStop.longitude
+            );
+          }
+
+          const subsequentTransitIdx = findNextTransitLegIndex(activeLegIndex + 1);
+          const nextTarget =
+            subsequentTransitIdx !== -1 && journey.legs[subsequentTransitIdx]
+              ? (journey.legs[subsequentTransitIdx] as TransitLeg).boardingStop
+              : journey.destination;
+          const distToNextTarget = this.calculateDistance(
+            location.latitude,
+            location.longitude,
+            nextTarget.latitude,
+            nextTarget.longitude
+          );
+
+          // Check if vehicle/user is moving away from alighting stop (distance increasing while past boarding stop)
+          const isMovingAwayFromAlighting =
+            lastDistToAlighting !== null &&
+            distToAlighting > lastDistToAlighting &&
+            distToBoarding > distToAlighting &&
+            (distToAlighting <= 300 || t >= 1.0);
+
+          const hasPassedStop =
+            distToBoarding > distToAlighting &&
+            (t >= 1.0 || isMovingAwayFromAlighting || distToNextTarget < distToAlighting);
+
           if (distToAlighting <= ALIGHTING_APPROACH_THRESHOLD_METERS) {
             nextState.currentState = "APPROACHING_ALIGHTING_STOP";
             nextState.activeInstruction = `${activeTransitLeg.alightingStop.name} is coming up in ${distToAlighting}m. Get ready to get off.`;
             nextState.voicePrompt = `${activeTransitLeg.alightingStop.name} is coming up. Get ready to get off.`;
             stateChanged = true;
-          } else if (distToBoarding > distToAlighting && distToAlighting <= 300) {
-            // Overshoot protection: GPS update jumped past 120m approach threshold but is within 300m past alighting stop
+          } else if (hasPassedStop) {
+            // Overshoot protection: GPS update jumped past alighting stop or vehicle is moving away
             nextState.currentState = "APPROACHING_ALIGHTING_STOP";
-            nextState.activeInstruction = `${activeTransitLeg.alightingStop.name} is coming up. Get ready to get off.`;
-            nextState.voicePrompt = `${activeTransitLeg.alightingStop.name} is coming up. Get ready to get off.`;
+            nextState.activeInstruction = `You have passed ${activeTransitLeg.alightingStop.name}. Get ready to get off.`;
+            nextState.voicePrompt = `You have passed ${activeTransitLeg.alightingStop.name}. Get ready to get off.`;
             stateChanged = true;
           } else {
             nextState.activeInstruction = `On route ${activeTransitLeg.routeShortName || ""}. Staying on board.`;
@@ -211,15 +284,48 @@ export class JourneyStateService {
             activeTransitLeg.boardingStop.longitude
           );
 
-          if (distToAlighting <= ALIGHTED_STOP_THRESHOLD_METERS) {
-            nextState.currentState = "ALIGHTED";
-            const nextLegIndex = activeLegIndex + 1;
-            nextState.currentLegIndex = nextLegIndex < journey.legs.length ? nextLegIndex : journey.legs.length - 1;
-            nextState.activeInstruction = `Get off at ${activeTransitLeg.alightingStop.name}.`;
-            nextState.voicePrompt = `Get off here at ${activeTransitLeg.alightingStop.name}.`;
-            stateChanged = true;
-          } else if (distToBoarding > distToAlighting && distToAlighting <= 300) {
-            // Overshoot protection: GPS update jumped past alighting stop (within 300m past stop)
+          const t = this.calculateVectorProjection(
+            activeTransitLeg.boardingStop.latitude,
+            activeTransitLeg.boardingStop.longitude,
+            activeTransitLeg.alightingStop.latitude,
+            activeTransitLeg.alightingStop.longitude,
+            location.latitude,
+            location.longitude
+          );
+
+          let lastDistToAlighting: number | null = null;
+          if (activeState.lastLocation) {
+            lastDistToAlighting = this.calculateDistance(
+              activeState.lastLocation.latitude,
+              activeState.lastLocation.longitude,
+              activeTransitLeg.alightingStop.latitude,
+              activeTransitLeg.alightingStop.longitude
+            );
+          }
+
+          const subsequentTransitIdx = findNextTransitLegIndex(activeLegIndex + 1);
+          const nextTarget =
+            subsequentTransitIdx !== -1 && journey.legs[subsequentTransitIdx]
+              ? (journey.legs[subsequentTransitIdx] as TransitLeg).boardingStop
+              : journey.destination;
+          const distToNextTarget = this.calculateDistance(
+            location.latitude,
+            location.longitude,
+            nextTarget.latitude,
+            nextTarget.longitude
+          );
+
+          const isMovingAwayFromAlighting =
+            lastDistToAlighting !== null &&
+            distToAlighting > lastDistToAlighting &&
+            distToBoarding > distToAlighting &&
+            (distToAlighting <= 300 || t >= 1.0);
+
+          const hasPassedStop =
+            distToBoarding > distToAlighting &&
+            (t >= 1.0 || isMovingAwayFromAlighting || distToNextTarget < distToAlighting);
+
+          if (distToAlighting <= ALIGHTED_STOP_THRESHOLD_METERS || hasPassedStop) {
             nextState.currentState = "ALIGHTED";
             const nextLegIndex = activeLegIndex + 1;
             nextState.currentLegIndex = nextLegIndex < journey.legs.length ? nextLegIndex : journey.legs.length - 1;

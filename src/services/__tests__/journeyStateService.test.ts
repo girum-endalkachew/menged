@@ -326,7 +326,35 @@ describe("JourneyStateService FSM Transitions", () => {
     }).toThrow("Invalid journey");
   });
 
-  test("Finding 3 Regression: GPS jump past 120m threshold up to 300m does NOT trap user in TRANSIT_LEG", () => {
+  test("Requirement 1: Normal transit approach", () => {
+    const state: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "TRANSIT_LEG",
+      currentLegIndex: 1,
+      boardingConfirmed: true,
+    };
+    // 500m before alighting stop
+    const pos500m: GPSLocation = { latitude: 9.0320, longitude: 38.7550, speed: 8.0, heading: 300, accuracy: 5, timestamp: Date.now() };
+    const res = JourneyStateService.evaluateState(state, pos500m, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("TRANSIT_LEG");
+    expect(res.stateChanged).toBe(false);
+  });
+
+  test("Requirement 2: Normal transition into APPROACHING_ALIGHTING_STOP", () => {
+    const state: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "TRANSIT_LEG",
+      currentLegIndex: 1,
+      boardingConfirmed: true,
+    };
+    // 100m before alighting stop (within 120m threshold)
+    const pos100m: GPSLocation = { latitude: 9.0358, longitude: 38.7525, speed: 5.0, heading: 320, accuracy: 5, timestamp: Date.now() };
+    const res = JourneyStateService.evaluateState(state, pos100m, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("APPROACHING_ALIGHTING_STOP");
+    expect(res.stateChanged).toBe(true);
+  });
+
+  test("Requirement 3: GPS jump past the alighting stop", () => {
     const stateInTransit: ActiveJourneyState = {
       ...createInitialState(),
       currentState: "TRANSIT_LEG",
@@ -355,18 +383,47 @@ describe("JourneyStateService FSM Transitions", () => {
     expect(res2.stateChanged).toBe(true);
   });
 
-  test("Finding 3 Regression: Normal GPS jitter at 500m before stop does NOT falsely trigger alighting", () => {
+  test("Requirement 4: Vehicle/user moving away from the alighting stop", () => {
     const stateInTransit: ActiveJourneyState = {
       ...createInitialState(),
       currentState: "TRANSIT_LEG",
       currentLegIndex: 1,
       boardingConfirmed: true,
+      lastLocation: { latitude: 9.0365, longitude: 38.7522, speed: 5.0, heading: 320, accuracy: 5, timestamp: Date.now() - 2000 },
     };
 
-    // GPS location 500m away from alighting stop
+    // Next location is moving away from alighting stop (200m away)
+    const posMovingAway: GPSLocation = {
+      latitude: 9.0380,
+      longitude: 38.7510,
+      speed: 10.0,
+      heading: 320,
+      accuracy: 5,
+      timestamp: Date.now(),
+    };
+
+    const res = JourneyStateService.evaluateState(stateInTransit, posMovingAway, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("APPROACHING_ALIGHTING_STOP");
+    expect(res.stateChanged).toBe(true);
+
+    const res2 = JourneyStateService.evaluateState(res.nextState, posMovingAway, testJourneyFixture);
+    expect(res2.nextState.currentState).toBe("ALIGHTED");
+    expect(res2.stateChanged).toBe(true);
+  });
+
+  test("Requirement 5: GPS jitter around the threshold does NOT falsely trigger alighting", () => {
+    const stateInTransit: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "TRANSIT_LEG",
+      currentLegIndex: 1,
+      boardingConfirmed: true,
+      lastLocation: { latitude: 9.0320, longitude: 38.7550, speed: 8.0, heading: 300, accuracy: 15, timestamp: Date.now() - 2000 },
+    };
+
+    // Jitter position 480m before stop
     const posJitter: GPSLocation = {
-      latitude: 9.0320,
-      longitude: 38.7550,
+      latitude: 9.0318,
+      longitude: 38.7552,
       speed: 8.0,
       heading: 300,
       accuracy: 15,
@@ -374,6 +431,126 @@ describe("JourneyStateService FSM Transitions", () => {
     };
 
     const res = JourneyStateService.evaluateState(stateInTransit, posJitter, testJourneyFixture);
+    expect(res.nextState.currentState).toBe("TRANSIT_LEG");
+    expect(res.stateChanged).toBe(false);
+  });
+
+  test("Requirement 6: Multi-leg journey after an overshoot scenario", () => {
+    const multiLegFixture: Journey = {
+      id: "journey_multileg_overshoot_test",
+      origin: { latitude: 8.9983, longitude: 38.7860 },
+      destination: { latitude: 9.0212, longitude: 38.8717 },
+      totalWalkingMeters: 400,
+      transfersCount: 1,
+      estimatedDurationMinutes: 45,
+      score: 50,
+      trust: { transit: "VERIFIED", fare: "UNAVAILABLE", realtime: "UNAVAILABLE" },
+      legs: [
+        {
+          type: "WALK",
+          from: { name: "Origin", latitude: 8.9983, longitude: 38.7860 },
+          to: { name: "Stop A1", latitude: 8.9984, longitude: 38.7861, stopId: "stop_a1" },
+          distanceMeters: 20,
+          estimatedMinutes: 1,
+        },
+        {
+          type: "TRANSIT",
+          routeId: "route_1",
+          routeShortName: "R1",
+          routeLongName: "Route 1",
+          routeType: 3,
+          boardingStop: { id: "stop_a1", name: "Stop A1", latitude: 8.9984, longitude: 38.7861 },
+          alightingStop: { id: "stop_b1", name: "Stop B1", latitude: 9.0100, longitude: 38.8000 },
+          boardingSequence: 1,
+          alightingSequence: 5,
+          stopsCount: 4,
+          orderedStops: [],
+        },
+        {
+          type: "TRANSFER",
+          fromStop: { id: "stop_b1", name: "Stop B1", latitude: 9.0100, longitude: 38.8000 },
+          toStop: { id: "stop_b2", name: "Stop B2", latitude: 9.0105, longitude: 38.8005 },
+          distanceMeters: 60,
+          estimatedMinutes: 2,
+        },
+        {
+          type: "TRANSIT",
+          routeId: "route_2",
+          routeShortName: "R2",
+          routeLongName: "Route 2",
+          routeType: 3,
+          boardingStop: { id: "stop_b2", name: "Stop B2", latitude: 9.0105, longitude: 38.8005 },
+          alightingStop: { id: "stop_c1", name: "Stop C1", latitude: 9.0210, longitude: 38.8715 },
+          boardingSequence: 1,
+          alightingSequence: 8,
+          stopsCount: 7,
+          orderedStops: [],
+        },
+        {
+          type: "WALK",
+          from: { name: "Stop C1", latitude: 9.0210, longitude: 38.8715, stopId: "stop_c1" },
+          to: { name: "Destination", latitude: 9.0212, longitude: 38.8717 },
+          distanceMeters: 30,
+          estimatedMinutes: 1,
+        },
+      ],
+    };
+
+    const stateLeg1: ActiveJourneyState = {
+      journeyId: multiLegFixture.id,
+      currentState: "TRANSIT_LEG",
+      currentLegIndex: 1,
+      boardingConfirmed: true,
+      lastLocation: null,
+      activeInstruction: "On board",
+      voicePrompt: "On board",
+    };
+
+    // GPS jumps past stop B1 towards transfer stop B2
+    const posOvershotB1: GPSLocation = {
+      latitude: 9.0104,
+      longitude: 38.8004,
+      speed: 8.0,
+      heading: 45,
+      accuracy: 5,
+      timestamp: Date.now(),
+    };
+
+    // Tick 1: TRANSIT_LEG -> APPROACHING_ALIGHTING_STOP
+    let res = JourneyStateService.evaluateState(stateLeg1, posOvershotB1, multiLegFixture);
+    expect(res.nextState.currentState).toBe("APPROACHING_ALIGHTING_STOP");
+
+    // Tick 2: APPROACHING_ALIGHTING_STOP -> ALIGHTED
+    res = JourneyStateService.evaluateState(res.nextState, posOvershotB1, multiLegFixture);
+    expect(res.nextState.currentState).toBe("ALIGHTED");
+    expect(res.nextState.currentLegIndex).toBe(2); // Transfer leg
+
+    // Tick 3: ALIGHTED -> WALKING_TO_STOP for second transit leg
+    res = JourneyStateService.evaluateState(res.nextState, posOvershotB1, multiLegFixture);
+    expect(res.nextState.currentState).toBe("WALKING_TO_STOP");
+    expect(res.nextState.boardingConfirmed).toBe(false);
+  });
+
+  test("Requirement 7: Reverse-direction journey does NOT trigger false alighting", () => {
+    const stateInTransit: ActiveJourneyState = {
+      ...createInitialState(),
+      currentState: "TRANSIT_LEG",
+      currentLegIndex: 1,
+      boardingConfirmed: true,
+      lastLocation: { latitude: 9.0100, longitude: 38.7700, speed: 6.0, heading: 120, accuracy: 5, timestamp: Date.now() - 2000 },
+    };
+
+    // Vehicle moves backwards towards boarding stop (latitude 8.9984, longitude 38.7861)
+    const posReverse: GPSLocation = {
+      latitude: 9.0050,
+      longitude: 38.7750,
+      speed: 6.0,
+      heading: 120,
+      accuracy: 5,
+      timestamp: Date.now(),
+    };
+
+    const res = JourneyStateService.evaluateState(stateInTransit, posReverse, testJourneyFixture);
     expect(res.nextState.currentState).toBe("TRANSIT_LEG");
     expect(res.stateChanged).toBe(false);
   });
