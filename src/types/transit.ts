@@ -1,4 +1,4 @@
-﻿export interface TransitStop {
+export interface TransitStop {
   id: string;
   name: string;
   nameAmharic: string;
@@ -21,6 +21,12 @@ export interface RouteOption {
   destination: string;
   transfers: number;
   totalCostETB: number;
+  fareStatus?: "ESTIMATED" | "UNAVAILABLE";
+  trust?: {
+    transit: "VERIFIED";
+    fare: "ESTIMATED" | "UNAVAILABLE";
+    realtime: "UNAVAILABLE";
+  };
   estimatedMinutes: number;
   walkingMinutes: number;
   mode: "minibus" | "bus" | "lrt" | "ride" | "multimodal";
