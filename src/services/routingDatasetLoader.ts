@@ -64,6 +64,8 @@ export class RoutingDatasetLoader {
       TransitRepository.fetchAllStopTimes(),
     ]);
 
+    // Shape points are cached lazily in TransitRepository per shapeId on demand during journey shape attachment
+
     const newGraph = new RoutingGraph(stopsList, routesList, tripsList, stopTimesList);
 
     // Atomic reference replacement

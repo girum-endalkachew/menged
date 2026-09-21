@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { stops, routes, trips, stopTimes } from "@/db/schema";
+import { stops, routes, trips, stopTimes, shapes } from "@/db/schema";
 import { eq, inArray, like, and, between } from "drizzle-orm";
 import { TransitStopData, TransitRouteData } from "@/services/transitService";
 
@@ -150,6 +150,84 @@ export class TransitRepository {
       return await db.select().from(routes).where(inArray(routes.id, routeIds));
     } catch (err: any) {
       throw new Error(`[DATABASE_CONNECTION_ERROR] Failed to bulk fetch routes: ${err?.message}`);
+    }
+  }
+
+  private static shapeCache = new Map<
+    string,
+    Array<{ shapeId: string; latitude: number; longitude: number; shapeSequence: number }>
+  >();
+
+  /**
+   * Set-based query: fetch shape points for given shapeIds sorted by shapeSequence
+   * Cached in memory per shapeId to maintain zero-query expansion invariants.
+   */
+  static async fetchShapesForShapeIds(
+    shapeIds: string[]
+  ): Promise<Array<{ shapeId: string; latitude: number; longitude: number; shapeSequence: number }>> {
+    if (shapeIds.length === 0) return [];
+
+    const missingIds = shapeIds.filter((id) => !this.shapeCache.has(id));
+    if (missingIds.length > 0) {
+      try {
+        const fetched = await db
+          .select({
+            shapeId: shapes.shapeId,
+            latitude: shapes.latitude,
+            longitude: shapes.longitude,
+            shapeSequence: shapes.shapeSequence,
+          })
+          .from(shapes)
+          .where(inArray(shapes.shapeId, missingIds))
+          .orderBy(shapes.shapeSequence);
+
+        const fetchedGrouped = new Map<
+          string,
+          Array<{ shapeId: string; latitude: number; longitude: number; shapeSequence: number }>
+        >();
+
+        for (const row of fetched) {
+          if (!fetchedGrouped.has(row.shapeId)) {
+            fetchedGrouped.set(row.shapeId, []);
+          }
+          fetchedGrouped.get(row.shapeId)!.push(row);
+        }
+
+        for (const id of missingIds) {
+          this.shapeCache.set(id, fetchedGrouped.get(id) || []);
+        }
+      } catch (err: any) {
+        console.warn("[TransitRepository] Error fetching shape points:", err?.message);
+      }
+    }
+
+    const result: Array<{ shapeId: string; latitude: number; longitude: number; shapeSequence: number }> = [];
+    for (const id of shapeIds) {
+      const cached = this.shapeCache.get(id);
+      if (cached) {
+        result.push(...cached);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Bulk fetch all shapes in database ordered by shapeSequence
+   */
+  static async fetchAllShapes(): Promise<Array<{ shapeId: string; latitude: number; longitude: number; shapeSequence: number }>> {
+    try {
+      return await db
+        .select({
+          shapeId: shapes.shapeId,
+          latitude: shapes.latitude,
+          longitude: shapes.longitude,
+          shapeSequence: shapes.shapeSequence,
+        })
+        .from(shapes)
+        .orderBy(shapes.shapeSequence);
+    } catch (err: any) {
+      console.warn("[TransitRepository] Error fetching all shapes:", err?.message);
+      return [];
     }
   }
 }

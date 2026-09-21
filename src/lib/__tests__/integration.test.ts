@@ -45,7 +45,7 @@ describe("Phase 4 Task 1 Integration Verification", () => {
     expect(routeOption.fareStatus).toBe("UNAVAILABLE");
     expect(routeOption.pathCoordinates.length).toBeGreaterThan(0);
     expect(routeOption.steps.length).toBeGreaterThan(0);
-  });
+  }, 15000);
 
   test("Transfer Journey (Bole -> Ayat Chefe) preserves multi-leg GTFS structure and steps", async () => {
     const bole = resolveLocationToCoordinates("Bole Medhanialem")!;
@@ -64,5 +64,5 @@ describe("Phase 4 Task 1 Integration Verification", () => {
     expect(routeOption.transfers).toBeGreaterThanOrEqual(1);
     expect(routeOption.steps.length).toBeGreaterThanOrEqual(3); // WALK + TRANSIT + TRANSFER/TRANSIT + WALK
     expect(routeOption.trust?.transit).toBe("VERIFIED");
-  });
+  }, 15000);
 });

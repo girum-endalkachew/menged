@@ -2,12 +2,12 @@
 
 import React from "react";
 import { useMengedStore } from "@/store/useMengedStore";
+import { useJourneyGeolocation } from "@/hooks/useJourneyGeolocation";
 import {
   Footprints,
   Bus,
   Navigation,
   CheckCircle2,
-  ArrowRight,
   AlertCircle,
   Volume2,
   X,
@@ -15,18 +15,24 @@ import {
 } from "lucide-react";
 
 export default function JourneyCompanion() {
+  // Start geolocation watcher during active navigation
+  useJourneyGeolocation();
+
   const { 
     journeyState, 
-    setJourneyState, 
     selectedRoute, 
+    activeJourney,
+    activeJourneyState,
+    confirmBoarding,
     cancelJourney, 
+    gpsError,
     language 
   } = useMengedStore();
 
   if (!selectedRoute) return null;
 
   // Render ARRIVED State Summary
-  if (journeyState === "ARRIVED") {
+  if (journeyState === "ARRIVED" || activeJourneyState?.currentState === "ARRIVED") {
     return (
       <div className="glass-panel p-6 space-y-6 fade-in border-[#C99A3D]/40">
         <div className="flex items-center gap-3">
@@ -50,7 +56,9 @@ export default function JourneyCompanion() {
           </div>
           <div>
             <span className="text-[10px] text-[#6E7772] dark:text-[#A8B5AE] block">FARE</span>
-            <span className="text-sm font-bold text-[#173C32] dark:text-[#D2A64C]">{selectedRoute.totalCostETB} ETB</span>
+            <span className="text-sm font-bold text-[#173C32] dark:text-[#D2A64C]">
+              {selectedRoute.fareStatus === "UNAVAILABLE" ? "Unavailable" : `${selectedRoute.totalCostETB} ETB`}
+            </span>
           </div>
           <div>
             <span className="text-[10px] text-[#6E7772] dark:text-[#A8B5AE] block">TRANSFERS</span>
@@ -60,13 +68,16 @@ export default function JourneyCompanion() {
 
         <button
           onClick={cancelJourney}
-          className="btn-forest w-full justify-center py-3 text-sm font-medium"
+          className="btn-forest w-full justify-center py-3 text-sm font-medium cursor-pointer"
         >
           {language === "am" ? "ጉዞን አጠናቅ" : "Done"}
         </button>
       </div>
     );
   }
+
+  const currentLegIdx = activeJourneyState?.currentLegIndex ?? 0;
+  const totalLegs = activeJourney?.legs.length ?? selectedRoute.steps.length;
 
   return (
     <div className="glass-panel p-6 space-y-6 fade-in relative border-[#173C32]/30 dark:border-[#D2A64C]/30 shadow-2xl">
@@ -75,7 +86,7 @@ export default function JourneyCompanion() {
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-[#C99A3D] animate-ping" />
           <span className="text-xs font-mono uppercase tracking-widest text-[#173C32] dark:text-[#D2A64C] font-semibold">
-            {journeyState.replace(/_/g, " ")}
+            {(activeJourneyState?.currentState || journeyState).replace(/_/g, " ")}
           </span>
         </div>
 
@@ -88,10 +99,18 @@ export default function JourneyCompanion() {
         </button>
       </div>
 
+      {/* GPS Warning Banner if any */}
+      {gpsError && (
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2 font-mono">
+          <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+          <span>{gpsError}</span>
+        </div>
+      )}
+
       {/* STATE-SPECIFIC GUIDANCE CARDS */}
 
-      {/* PREPARING */}
-      {journeyState === "PREPARING" && (
+      {/* PREPARING / PLANNED */}
+      {(journeyState === "PREPARING" || activeJourneyState?.currentState === "PLANNED") && (
         <div className="space-y-4 text-center py-4">
           <Compass className="w-8 h-8 text-[#C99A3D] animate-spin mx-auto" style={{ animationDuration: "3s" }} />
           <p className="font-h3 text-[#17332D] dark:text-[#F4F0E6]">
@@ -104,7 +123,7 @@ export default function JourneyCompanion() {
       )}
 
       {/* WALKING TO STOP */}
-      {journeyState === "WALKING_TO_STOP" && (
+      {(journeyState === "WALKING_TO_STOP" || activeJourneyState?.currentState === "WALKING_TO_STOP") && (
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <div className="p-3 rounded-2xl bg-[#173C32]/10 dark:bg-[#D2A64C]/10 text-[#173C32] dark:text-[#D2A64C]">
@@ -113,45 +132,10 @@ export default function JourneyCompanion() {
             <div>
               <span className="text-[10px] font-mono uppercase text-[#6E7772] dark:text-[#A8B5AE]">Walk to station</span>
               <h3 className="font-h3 text-[#17332D] dark:text-[#F4F0E6]">
-                Walk to {selectedRoute.steps[0]?.from || selectedRoute.origin} terminal
+                {activeJourneyState?.activeInstruction || `Walk to boarding station`}
               </h3>
               <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] font-mono mt-0.5">
-                ~{selectedRoute.walkingMinutes} min ({selectedRoute.walkingMinutes * 70}m)
-              </p>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-white/50 dark:bg-[#10251F]/50 border border-[#D9DED8] dark:border-[#315047] text-xs space-y-1">
-            <span className="font-mono text-[#C99A3D] block font-semibold">DIRECTION</span>
-            <p className="text-[#17332D] dark:text-[#F4F0E6] m-0">
-              Head east towards the main taxi queue. Look for white and blue minibuses.
-            </p>
-          </div>
-
-          <button
-            onClick={() => setJourneyState("AT_STOP")}
-            className="btn-forest w-full justify-center py-3 text-xs uppercase tracking-wider"
-          >
-            <span>Arrived at stop</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* AT STOP / WAITING */}
-      {(journeyState === "AT_STOP" || journeyState === "WAITING_FOR_TRANSPORT") && (
-        <div className="space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="p-3 rounded-2xl bg-[#C99A3D]/10 text-[#C99A3D]">
-              <Bus className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[10px] font-mono uppercase text-[#6E7772] dark:text-[#A8B5AE]">At Terminal</span>
-              <h3 className="font-h3 text-[#17332D] dark:text-[#F4F0E6]">
-                Board {selectedRoute.steps[0]?.vehicleType}
-              </h3>
-              <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] font-mono mt-0.5">
-                Target fare: {selectedRoute.steps[0]?.costETB} ETB
+                ~{selectedRoute.walkingMinutes} min walk
               </p>
             </div>
           </div>
@@ -162,13 +146,40 @@ export default function JourneyCompanion() {
               <span>Voice Guidance</span>
             </div>
             <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] m-0">
-              &ldquo;You are at the stop. Confirm when you board the vehicle.&rdquo;
+              &ldquo;{activeJourneyState?.voicePrompt || "Walk to the transit stop."}&rdquo;
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* AT STOP / WAITING */}
+      {(journeyState === "AT_STOP" || activeJourneyState?.currentState === "AT_STOP") && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="p-3 rounded-2xl bg-[#C99A3D]/10 text-[#C99A3D]">
+              <Bus className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-[#6E7772] dark:text-[#A8B5AE]">At Terminal</span>
+              <h3 className="font-h3 text-[#17332D] dark:text-[#F4F0E6]">
+                {activeJourneyState?.activeInstruction || "At terminal stop"}
+              </h3>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-white/50 dark:bg-[#10251F]/50 border border-[#D9DED8] dark:border-[#315047] space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-[#17332D] dark:text-[#F4F0E6]">
+              <Volume2 className="w-4 h-4 text-[#C99A3D]" />
+              <span>Voice Guidance</span>
+            </div>
+            <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] m-0">
+              &ldquo;{activeJourneyState?.voicePrompt || "You are at the stop. Confirm when on board."}&rdquo;
             </p>
           </div>
 
           <button
-            onClick={() => setJourneyState("ONBOARD")}
-            className="btn-forest w-full justify-center py-3 text-xs uppercase tracking-wider"
+            onClick={() => confirmBoarding()}
+            className="btn-forest w-full justify-center py-3 text-xs uppercase tracking-wider font-bold cursor-pointer"
           >
             <span>I&apos;m on board</span>
             <CheckCircle2 className="w-4 h-4" />
@@ -176,8 +187,8 @@ export default function JourneyCompanion() {
         </div>
       )}
 
-      {/* ONBOARD TRACKING */}
-      {journeyState === "ONBOARD" && (
+      {/* ONBOARD / TRANSIT LEG */}
+      {(journeyState === "ONBOARD" || activeJourneyState?.currentState === "TRANSIT_LEG") && (
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <div className="p-3 rounded-2xl bg-[#173C32]/20 dark:bg-[#D2A64C]/20 text-[#173C32] dark:text-[#D2A64C]">
@@ -186,46 +197,38 @@ export default function JourneyCompanion() {
             <div>
               <span className="text-[10px] font-mono uppercase text-[#173C32] dark:text-[#D2A64C] font-bold">Onboard Vehicle</span>
               <h3 className="font-h3 text-[#17332D] dark:text-[#F4F0E6]">
-                Heading toward {selectedRoute.steps[0]?.to || selectedRoute.destination}
+                {activeJourneyState?.activeInstruction || `Heading toward destination`}
               </h3>
-              <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] font-mono mt-0.5">
-                Est. remaining time: ~{selectedRoute.estimatedMinutes - 5} mins
-              </p>
             </div>
           </div>
 
           <div className="p-4 rounded-xl bg-[#173C32]/5 dark:bg-[#D8E4DC]/5 border border-[#D9DED8] dark:border-[#315047] space-y-2">
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between text-xs font-mono">
               <span className="text-[#6E7772] dark:text-[#A8B5AE]">Current Leg:</span>
-              <span className="font-semibold text-[#17332D] dark:text-[#F4F0E6]">Leg 1 of {selectedRoute.steps.length}</span>
+              <span className="font-semibold text-[#17332D] dark:text-[#F4F0E6]">Leg {currentLegIdx + 1} of {totalLegs}</span>
             </div>
             <div className="w-full bg-[#D9DED8] dark:bg-[#315047] h-1.5 rounded-full overflow-hidden">
-              <div className="bg-[#C99A3D] h-full w-2/3 transition-all duration-500" />
+              <div
+                className="bg-[#C99A3D] h-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.round(((currentLegIdx + 1) / totalLegs) * 100))}%` }}
+              />
             </div>
           </div>
 
-          <div className="flex gap-2">
-            {selectedRoute.transfers > 0 ? (
-              <button
-                onClick={() => setJourneyState("TRANSFER")}
-                className="btn-glass flex-1 justify-center py-2.5 text-xs"
-              >
-                <span>Approach Transfer</span>
-              </button>
-            ) : null}
-
-            <button
-              onClick={() => setJourneyState("APPROACHING_STOP")}
-              className="btn-forest flex-1 justify-center py-2.5 text-xs"
-            >
-              <span>Approaching Destination</span>
-            </button>
+          <div className="p-4 rounded-xl bg-white/50 dark:bg-[#10251F]/50 border border-[#D9DED8] dark:border-[#315047] space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-[#17332D] dark:text-[#F4F0E6]">
+              <Volume2 className="w-4 h-4 text-[#C99A3D]" />
+              <span>Voice Guidance</span>
+            </div>
+            <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] m-0">
+              &ldquo;{activeJourneyState?.voicePrompt || "Staying on board."}&rdquo;
+            </p>
           </div>
         </div>
       )}
 
       {/* APPROACHING STOP */}
-      {journeyState === "APPROACHING_STOP" && (
+      {(journeyState === "APPROACHING_STOP" || activeJourneyState?.currentState === "APPROACHING_ALIGHTING_STOP") && (
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <div className="p-3 rounded-2xl bg-[#B9653D]/20 text-[#B9653D]">
@@ -234,26 +237,49 @@ export default function JourneyCompanion() {
             <div>
               <span className="text-[10px] font-mono uppercase text-[#B9653D] font-bold">Prepare to Disembark</span>
               <h3 className="font-h3 text-[#17332D] dark:text-[#F4F0E6]">
-                Get off at {selectedRoute.destination}
+                {activeJourneyState?.activeInstruction || `Get ready to get off`}
               </h3>
-              <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] font-mono mt-0.5">
-                Stop is ~200 meters ahead
-              </p>
             </div>
           </div>
 
-          <button
-            onClick={() => setJourneyState("WALKING_TO_DESTINATION")}
-            className="btn-forest w-full justify-center py-3 text-xs uppercase tracking-wider"
-          >
-            <span>I&apos;ve stepped off</span>
-            <Footprints className="w-4 h-4" />
-          </button>
+          <div className="p-4 rounded-xl bg-white/50 dark:bg-[#10251F]/50 border border-[#D9DED8] dark:border-[#315047] space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-[#17332D] dark:text-[#F4F0E6]">
+              <Volume2 className="w-4 h-4 text-[#C99A3D]" />
+              <span>Voice Guidance</span>
+            </div>
+            <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] m-0">
+              &ldquo;{activeJourneyState?.voicePrompt || "Get ready to get off."}&rdquo;
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* TRANSFER / ALIGHTED */}
+      {(journeyState === "TRANSFER" || activeJourneyState?.currentState === "ALIGHTED") && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="p-3 rounded-2xl bg-[#C99A3D]/20 text-[#C99A3D]">
+              <Footprints className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-[#C99A3D] font-bold">Transfer Leg</span>
+              <h3 className="font-h3 text-[#17332D] dark:text-[#F4F0E6]">
+                {activeJourneyState?.activeInstruction || `Transfer to next leg`}
+              </h3>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[#173C32]/5 dark:bg-[#D8E4DC]/5 border border-[#D9DED8] dark:border-[#315047] space-y-2 font-mono text-xs">
+            <div className="flex justify-between">
+              <span className="text-[#6E7772] dark:text-[#A8B5AE]">Transfer Progress:</span>
+              <span className="font-semibold text-[#17332D] dark:text-[#F4F0E6]">Leg {currentLegIdx + 1} of {totalLegs}</span>
+            </div>
+          </div>
         </div>
       )}
 
       {/* WALKING TO DESTINATION */}
-      {journeyState === "WALKING_TO_DESTINATION" && (
+      {(journeyState === "WALKING_TO_DESTINATION" || activeJourneyState?.currentState === "WALKING_TO_DESTINATION") && (
         <div className="space-y-4">
           <div className="flex items-start gap-3">
             <div className="p-3 rounded-2xl bg-[#173C32]/10 dark:bg-[#D2A64C]/10 text-[#173C32] dark:text-[#D2A64C]">
@@ -262,18 +288,20 @@ export default function JourneyCompanion() {
             <div>
               <span className="text-[10px] font-mono uppercase text-[#6E7772] dark:text-[#A8B5AE]">Final Leg</span>
               <h3 className="font-h3 text-[#17332D] dark:text-[#F4F0E6]">
-                Walk 2 minutes to final destination
+                {activeJourneyState?.activeInstruction || `Walk to final destination`}
               </h3>
             </div>
           </div>
 
-          <button
-            onClick={() => setJourneyState("ARRIVED")}
-            className="btn-forest w-full justify-center py-3 text-xs uppercase tracking-wider"
-          >
-            <span>Complete Journey</span>
-            <CheckCircle2 className="w-4 h-4" />
-          </button>
+          <div className="p-4 rounded-xl bg-white/50 dark:bg-[#10251F]/50 border border-[#D9DED8] dark:border-[#315047] space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-[#17332D] dark:text-[#F4F0E6]">
+              <Volume2 className="w-4 h-4 text-[#C99A3D]" />
+              <span>Voice Guidance</span>
+            </div>
+            <p className="text-xs text-[#6E7772] dark:text-[#A8B5AE] m-0">
+              &ldquo;{activeJourneyState?.voicePrompt || "Walk to your final destination."}&rdquo;
+            </p>
+          </div>
         </div>
       )}
     </div>

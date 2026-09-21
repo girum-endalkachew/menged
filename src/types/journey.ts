@@ -34,6 +34,8 @@ export interface TransitLeg {
   alightingSequence: number;
   stopsCount: number;
   orderedStops: Array<{ id: string; name: string; latitude: number; longitude: number; stopSequence: number }>;
+  tripId?: string;
+  shapeId?: string;
   shapePoints?: Array<[number, number]>; // [lng, lat] for MapLibre GL
 }
 

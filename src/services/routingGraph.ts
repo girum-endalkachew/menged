@@ -10,6 +10,13 @@ export interface OrderedStop {
   stop: TransitStopData;
 }
 
+export interface ShapePointRecord {
+  shapeId: string;
+  latitude: number;
+  longitude: number;
+  shapeSequence: number;
+}
+
 export class RoutingGraph {
   readonly stopsById: Map<string, TransitStopData>;
   readonly stopTimesByStopId: Map<string, StopTimeRecord[]>;
@@ -17,12 +24,14 @@ export class RoutingGraph {
   readonly tripsById: Map<string, TripRecord>;
   readonly routesById: Map<string, TransitRouteData>;
   readonly orderedStopsByTripId: Map<string, OrderedStop[]>;
+  readonly shapesByShapeId: Map<string, ShapePointRecord[]>;
 
   constructor(
     stopsList: TransitStopData[],
     routesList: TransitRouteData[],
     tripsList: TripRecord[],
-    stopTimesList: StopTimeRecord[]
+    stopTimesList: StopTimeRecord[],
+    shapesList?: ShapePointRecord[]
   ) {
     this.stopsById = new Map(stopsList.map((s) => [s.id, s]));
     this.routesById = new Map(routesList.map((r) => [r.id, r]));
@@ -65,6 +74,18 @@ export class RoutingGraph {
     }
 
     this.orderedStopsByTripId = orderedMap;
+
+    // Precompute shapesByShapeId sorted by shapeSequence
+    const shapesMap = new Map<string, ShapePointRecord[]>();
+    if (shapesList && shapesList.length > 0) {
+      for (const s of shapesList) {
+        if (!shapesMap.has(s.shapeId)) {
+          shapesMap.set(s.shapeId, []);
+        }
+        shapesMap.get(s.shapeId)!.push(s);
+      }
+    }
+    this.shapesByShapeId = shapesMap;
   }
 
   getStop(id: string): TransitStopData | undefined {
@@ -89,6 +110,10 @@ export class RoutingGraph {
 
   getOrderedStopsForTrip(tripId: string): OrderedStop[] {
     return this.orderedStopsByTripId.get(tripId) || [];
+  }
+
+  getShapePointsForShapeId(shapeId: string): ShapePointRecord[] {
+    return this.shapesByShapeId.get(shapeId) || [];
   }
 
   findStopsNear(lat: number, lon: number, radiusMeters = 500): TransitStopData[] {

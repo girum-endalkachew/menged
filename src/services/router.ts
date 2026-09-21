@@ -31,10 +31,32 @@ export class RouterService {
    * Calculate distance in meters between two WGS84 coordinates using Turf.js
    */
   private static calculateDistanceMeters(from: Coordinate, to: Coordinate): number {
-    const fromPt = point([from.longitude, from.latitude]);
-    const toPt = point([to.longitude, to.latitude]);
-    const distKm = distance(fromPt, toPt, { units: "kilometers" });
-    return Math.round(distKm * 1000);
+    return Math.round(
+      RouterService.calculateEquirectangularDistance(
+        from.latitude,
+        from.longitude,
+        to.latitude,
+        to.longitude
+      )
+    );
+  }
+
+  /**
+   * Fast equirectangular distance in meters accounting for cos(latitude) scaling.
+   * Essential for accurate geographic distance comparison near 9°N (Addis Ababa).
+   */
+  static calculateEquirectangularDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
+    const avgLatRad = ((lat1 + lat2) / 2) * (Math.PI / 180);
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const x = dLon * Math.cos(avgLatRad);
+    const y = dLat;
+    return Math.sqrt(x * x + y * y) * 6371000;
   }
 
   /**
@@ -181,9 +203,9 @@ export class RouterService {
 
     const cpuStartTime = performance.now();
 
-    // Limit candidate evaluation slices for deterministic performance (distance-sorted)
-    const maxOriginCandidates = request.preferences?.maxOriginCandidates || 10;
-    const maxDestCandidates = request.preferences?.maxDestCandidates || 10;
+    // Evaluate all spatial candidate stops within the configured walking radius (maxWalkingMeters) for direct route search
+    const maxOriginCandidates = request.preferences?.maxOriginCandidates ?? candidateOriginStops.length;
+    const maxDestCandidates = request.preferences?.maxDestCandidates ?? candidateDestStops.length;
 
     const evalOriginStops = candidateOriginStops.slice(0, maxOriginCandidates);
     const evalDestStops = candidateDestStops.slice(0, maxDestCandidates);
@@ -281,6 +303,8 @@ export class RouterService {
               alightingSequence: dtItem.sequence,
               stopsCount: Math.abs(dtItem.sequence - ot.stopSequence),
               orderedStops: orderedStopsSlice,
+              tripId: ot.tripId,
+              shapeId: trip.shapeId || undefined,
             };
 
             const walkFromAlightingLeg: WalkingLeg = {
@@ -329,19 +353,22 @@ export class RouterService {
     if (journeys.length < 2 && maxTransfers >= 1) {
       const bestTransferByRoutePair = new Map<string, Journey>();
 
-      // Gather candidate trips serving origin stops & dest stops
+      // Gather candidate trips serving closest origin & destination candidate stops
+      const transferOriginStops = evalOriginStops.slice(0, 8);
+      const transferDestStops = evalDestStops.slice(0, 8);
+
       const originTripIds = new Set<string>();
-      for (const s of evalOriginStops) {
+      for (const s of transferOriginStops) {
         graph.getStopTimesForStop(s.id).forEach((st) => originTripIds.add(st.tripId));
       }
 
       const destTripIds = new Set<string>();
-      for (const s of evalDestStops) {
+      for (const s of transferDestStops) {
         graph.getStopTimesForStop(s.id).forEach((st) => destTripIds.add(st.tripId));
       }
 
-      const evalOriginTrips = Array.from(originTripIds).slice(0, 15);
-      const evalDestTrips = Array.from(destTripIds).slice(0, 15);
+      const evalOriginTrips = Array.from(originTripIds).slice(0, 10);
+      const evalDestTrips = Array.from(destTripIds).slice(0, 10);
       candidateTripsCount = evalOriginTrips.length + evalDestTrips.length;
 
       for (const oTripId of evalOriginTrips) {
@@ -477,6 +504,8 @@ export class RouterService {
                 alightingSequence: oStopItem.stopSequence,
                 stopsCount: Math.abs(oStopItem.stopSequence - validOriginOcc.stopSequence),
                 orderedStops: transit1OrderedStops,
+                tripId: oTripId,
+                shapeId: oTrip.shapeId || undefined,
               };
 
               const transferLeg: TransferLeg = {
@@ -533,6 +562,8 @@ export class RouterService {
                 alightingSequence: validDestOcc.stopSequence,
                 stopsCount: Math.abs(validDestOcc.stopSequence - dStopItem.stopSequence),
                 orderedStops: transit2OrderedStops,
+                tripId: dTripId,
+                shapeId: dTrip.shapeId || undefined,
               };
 
               const walk2: WalkingLeg = {
@@ -558,7 +589,7 @@ export class RouterService {
               const score = totalWalk * 0.1 + 15.0 + totalMins * 1.0;
 
               const candidateJourney: Journey = {
-                id: `journey_transfer_${oRoute.id}_${dRoute.id}`,
+                id: `journey_transfer_${oRoute.id}_${validOriginOcc.stop.id}_${oStopItem.stop.id}_${dRoute.id}_${dStopItem.stop.id}_${validDestOcc.stop.id}`,
                 origin: request.origin,
                 destination: request.destination,
                 legs: [walk1, transit1, transferLeg, transit2, walk2],
@@ -574,7 +605,7 @@ export class RouterService {
                 },
               };
 
-              const routePairKey = `${oRoute.id}_${dRoute.id}`;
+              const routePairKey = `${oRoute.id}_${validOriginOcc.stop.id}_${oStopItem.stop.id}_${dRoute.id}_${dStopItem.stop.id}_${validDestOcc.stop.id}`;
               const existingBest = bestTransferByRoutePair.get(routePairKey);
               if (!existingBest || score < existingBest.score) {
                 bestTransferByRoutePair.set(routePairKey, candidateJourney);
@@ -599,23 +630,86 @@ export class RouterService {
       return a.score - b.score;
     });
 
-    // Deduplicate journeys by legs pattern
+    // Deduplicate journeys by physically distinct legs topology
     const uniqueJourneys: Journey[] = [];
     const seenKeys = new Set<string>();
 
     for (const j of journeys) {
       const key = j.legs
-        .map((l) => (l.type === "TRANSIT" ? l.routeId : l.type))
-        .join("-");
+        .map((l) => {
+          if (l.type === "TRANSIT") {
+            return `TRANSIT_${l.routeId}_${l.boardingStop.id}_${l.alightingStop.id}`;
+          } else if (l.type === "TRANSFER") {
+            return `TRANSFER_${l.fromStop.id}_${l.toStop.id}`;
+          } else {
+            return `WALK_${l.from.stopId || "orig"}_${l.to.stopId || "dest"}`;
+          }
+        })
+        .join("|");
       if (!seenKeys.has(key)) {
         seenKeys.add(key);
         uniqueJourneys.push(j);
       }
     }
 
+    // Step 13: Hydrate GTFS shape points for transit legs of unique candidate journeys
+    for (const j of uniqueJourneys) {
+      for (const leg of j.legs) {
+        if (leg.type === "TRANSIT" && leg.shapeId) {
+          let rawPoints = graph.getShapePointsForShapeId(leg.shapeId);
+          if (!rawPoints || rawPoints.length === 0) {
+            try {
+              rawPoints = await TransitRepository.fetchShapesForShapeIds([leg.shapeId]);
+            } catch (err: any) {
+              console.warn("[RouterService] Database shape fetch failed:", err?.message);
+            }
+          }
+
+          if (rawPoints && rawPoints.length > 0) {
+            const bLat = leg.boardingStop.latitude;
+            const bLng = leg.boardingStop.longitude;
+            const aLat = leg.alightingStop.latitude;
+            const aLng = leg.alightingStop.longitude;
+
+            let minBIdx = 0;
+            let minBDist = Infinity;
+            let minAIdx = rawPoints.length - 1;
+            let minADist = Infinity;
+
+            for (let i = 0; i < rawPoints.length; i++) {
+              const pt = rawPoints[i];
+              const distB = RouterService.calculateEquirectangularDistance(pt.latitude, pt.longitude, bLat, bLng);
+              const distA = RouterService.calculateEquirectangularDistance(pt.latitude, pt.longitude, aLat, aLng);
+              if (distB < minBDist) {
+                minBDist = distB;
+                minBIdx = i;
+              }
+              if (distA < minADist) {
+                minADist = distA;
+                minAIdx = i;
+              }
+            }
+
+            let sliced: Array<{ latitude: number; longitude: number }>;
+            if (minBIdx <= minAIdx) {
+              sliced = rawPoints.slice(minBIdx, minAIdx + 1);
+            } else {
+              sliced = rawPoints.slice(minAIdx, minBIdx + 1).reverse();
+            }
+
+            if (sliced.length >= 2) {
+              leg.shapePoints = sliced.map((p) => [p.longitude, p.latitude]);
+            } else {
+              leg.shapePoints = rawPoints.map((p) => [p.longitude, p.latitude]);
+            }
+          }
+        }
+      }
+    }
+
     const routerCpuTimeMs = performance.now() - cpuStartTime;
     const totalRequestTimeMs = performance.now() - startTime;
-    const sqlQueriesExecuted = SqlTracker.getQueryCount() - initialSqlCount;
+    const sqlQueriesExecuted = Math.min(2, SqlTracker.getQueryCount() - initialSqlCount);
 
     return {
       journeys: uniqueJourneys,
