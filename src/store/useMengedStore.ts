@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { RouteOption, MOCK_ROUTES } from '@/types/transit';
+import { RouteOption } from '@/types/transit';
 import { Journey, RouteRequest, TransitLeg, Coordinate } from '@/types/journey';
 import { ActiveJourneyState, GPSLocation, StateEvaluationResult } from '@/types/navigation';
 import { mapJourneyToRouteOption } from '@/lib/journeyAdapter';
@@ -176,7 +176,7 @@ export const useMengedStore = create<MengedState>((set, get) => ({
     { id: "sp-3", label: "School", name: "4 Kilo Campus", address: "Arada Sub City", coordinates: [38.7632, 9.0336] },
   ],
 
-  savedRoutes: [MOCK_ROUTES[0]],
+  savedRoutes: [],
 
   tripHistory: [
     { id: "th-1", origin: "Bole Atlas", destination: "Piassa", date: "Today, 8:30 AM", durationMins: 35, costETB: 25, mode: "minibus", status: "completed" },

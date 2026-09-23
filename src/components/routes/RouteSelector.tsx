@@ -6,6 +6,7 @@ import { RouteOption } from "@/types/transit";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Navigation, Compass, DollarSign, CornerDownRight } from "lucide-react";
+import PlaceSearchInput from "@/components/planner/PlaceSearchInput";
 
 export default function RouteSelector() {
   const { routes, selectedRoute, setSelectedRoute, language, isLoadingRoutes, routeError } = useMengedStore();
@@ -43,10 +44,59 @@ export default function RouteSelector() {
     );
   }
 
+  const {
+    originName,
+    originCoordinates,
+    destinationName,
+    destinationCoordinates,
+    setManualOrigin,
+    setDestinationPlace,
+    fetchRoutes,
+  } = useMengedStore();
+
+  const handleSearch = async () => {
+    if (originCoordinates && destinationCoordinates) {
+      await fetchRoutes(originCoordinates, destinationCoordinates);
+    }
+  };
+
   if (routes.length === 0) {
     return (
-      <div className="space-y-4 w-full py-6 text-center text-zinc-400 text-xs font-mono">
-        No routes available. Enter an origin and destination to search transit options.
+      <div className="space-y-4 w-full p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
+        <h4 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider m-0">
+          Plan Your Transit Journey
+        </h4>
+        <p className="text-xs text-zinc-400 m-0 leading-relaxed">
+          Select starting location and destination to search real GTFS routes across Addis Ababa.
+        </p>
+
+        <div className="space-y-3 pt-1">
+          <div>
+            <label className="text-[10px] font-mono text-zinc-400 uppercase block mb-1">Starting Point (Origin)</label>
+            <PlaceSearchInput
+              placeholder="Origin (e.g. Bole Medhanialem, Mexico...)"
+              initialValue={originName}
+              onSelectPlace={(place) => setManualOrigin(place)}
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-mono text-zinc-400 uppercase block mb-1">Destination</label>
+            <PlaceSearchInput
+              placeholder="Destination (e.g. Piassa, 4 Kilo, Ayat...)"
+              initialValue={destinationName}
+              onSelectPlace={(place) => setDestinationPlace(place)}
+            />
+          </div>
+
+          <button
+            onClick={handleSearch}
+            disabled={!originCoordinates || !destinationCoordinates}
+            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer border-none shadow-lg mt-2"
+          >
+            Find Real Routes
+          </button>
+        </div>
       </div>
     );
   }
