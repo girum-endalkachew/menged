@@ -1,3 +1,27 @@
+import { JourneyMetrics } from './journeyMetrics';
+import {
+  JourneyRankingPreference,
+  JourneyRankingDiagnostics,
+  JourneyRankingResult,
+} from './journeyRanking';
+import {
+  JourneyCandidateForJEV,
+  JEVUserContext,
+  JEVJourneyDecision,
+  JEVResult,
+} from './jev';
+
+export type {
+  JourneyMetrics,
+  JourneyRankingPreference,
+  JourneyRankingDiagnostics,
+  JourneyRankingResult,
+  JourneyCandidateForJEV,
+  JEVUserContext,
+  JEVJourneyDecision,
+  JEVResult,
+};
+
 export interface Coordinate {
   latitude: number;
   longitude: number;
@@ -11,6 +35,7 @@ export interface RouteRequest {
     maxTransfers?: number;
     maxOriginCandidates?: number;
     maxDestCandidates?: number;
+    rankingPreference?: JourneyRankingPreference;
   };
 }
 
@@ -64,4 +89,5 @@ export interface Journey {
     fare: "UNAVAILABLE" | "ESTIMATED";
     realtime: "UNAVAILABLE";
   };
+  metrics?: JourneyMetrics;
 }

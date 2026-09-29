@@ -8,6 +8,7 @@ import {
 } from "@/types/navigation";
 import {
   BOARDING_STOP_THRESHOLD_METERS,
+  AT_STOP_EXIT_THRESHOLD_METERS,
   ALIGHTING_APPROACH_THRESHOLD_METERS,
   ALIGHTED_STOP_THRESHOLD_METERS,
   ARRIVAL_THRESHOLD_METERS,
@@ -182,7 +183,7 @@ export class JourneyStateService {
             activeTransitLeg.boardingStop.longitude
           );
 
-          if (distToBoarding > BOARDING_STOP_THRESHOLD_METERS) {
+          if (distToBoarding > AT_STOP_EXIT_THRESHOLD_METERS) {
             nextState.currentState = "WALKING_TO_STOP";
             nextState.activeInstruction = `Walk to ${activeTransitLeg.boardingStop.name} (${distToBoarding}m remaining).`;
             nextState.voicePrompt = `Walk to ${activeTransitLeg.boardingStop.name}.`;
@@ -251,16 +252,16 @@ export class JourneyStateService {
             distToBoarding > distToAlighting &&
             (t >= 1.0 || isMovingAwayFromAlighting || distToNextTarget < distToAlighting);
 
-          if (distToAlighting <= ALIGHTING_APPROACH_THRESHOLD_METERS) {
-            nextState.currentState = "APPROACHING_ALIGHTING_STOP";
-            nextState.activeInstruction = `${activeTransitLeg.alightingStop.name} is coming up in ${distToAlighting}m. Get ready to get off.`;
-            nextState.voicePrompt = `${activeTransitLeg.alightingStop.name} is coming up. Get ready to get off.`;
-            stateChanged = true;
-          } else if (hasPassedStop) {
+          if (hasPassedStop) {
             // Overshoot protection: GPS update jumped past alighting stop or vehicle is moving away
             nextState.currentState = "APPROACHING_ALIGHTING_STOP";
             nextState.activeInstruction = `You have passed ${activeTransitLeg.alightingStop.name}. Get ready to get off.`;
             nextState.voicePrompt = `You have passed ${activeTransitLeg.alightingStop.name}. Get ready to get off.`;
+            stateChanged = true;
+          } else if (distToAlighting <= ALIGHTING_APPROACH_THRESHOLD_METERS) {
+            nextState.currentState = "APPROACHING_ALIGHTING_STOP";
+            nextState.activeInstruction = `${activeTransitLeg.alightingStop.name} is coming up in ${distToAlighting}m. Get ready to get off.`;
+            nextState.voicePrompt = `${activeTransitLeg.alightingStop.name} is coming up. Get ready to get off.`;
             stateChanged = true;
           } else {
             nextState.activeInstruction = `On route ${activeTransitLeg.routeShortName || ""}. Staying on board.`;

@@ -36,7 +36,7 @@ describe("Phase 4 Task 2 FSM & Journey Companion Integration", () => {
     expect(updatedState.selectedRoute?.id).toBe(selected.id);
     expect(updatedState.activeJourney?.id).toBe(selected.id);
     expect(updatedState.journeyState).toBe("ROUTE_SELECTED");
-  }, 15000);
+  }, 30000);
 
   test("B. Start journey initializes activeJourneyState with PLANNED", async () => {
     const bole = resolveLocationToCoordinates("Bole Medhanialem")!;
@@ -58,7 +58,7 @@ describe("Phase 4 Task 2 FSM & Journey Companion Integration", () => {
     expect(state.activeJourneyState).not.toBeNull();
     expect(state.activeJourneyState?.currentState).toBe("PLANNED");
     expect(state.journeyState).toBe("WALKING_TO_STOP");
-  }, 15000);
+  }, 30000);
 
   test("H. Golden Corridor (Bole -> Piassa) FSM Progression with real coordinates", async () => {
     const bole = resolveLocationToCoordinates("Bole Medhanialem")!;

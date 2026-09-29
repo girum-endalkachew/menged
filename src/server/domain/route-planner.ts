@@ -1,6 +1,6 @@
 import type { RouteOption } from "@/types/transit";
 
-export type RoutePreference = "cheapest" | "fastest" | "least_walking" | "balanced";
+export type RoutePreference = "cheapest" | "fastest" | "least_walking" | "fewest_transfers" | "balanced";
 
 export interface PlanTripInput {
   origin: string;
@@ -51,6 +51,7 @@ function scoreRoute(route: RouteOption, preference: RoutePreference) {
   if (preference === "cheapest") return route.totalCostETB;
   if (preference === "fastest") return route.estimatedMinutes;
   if (preference === "least_walking") return route.walkingMinutes;
+  if (preference === "fewest_transfers") return route.transfers;
 
   return route.totalCostETB * 0.5 + route.estimatedMinutes * 0.35 + route.walkingMinutes * 0.15;
 }

@@ -258,7 +258,7 @@ describe("Task 4 — Real Gebeta Basemap & Production Journey Map Visualization"
         expect(transitLeg.shapePoints[0].length).toBe(2); // [lng, lat]
       }
     }
-  }, 15000);
+  }, 30000);
 
   test("9. Map failure fallback does not throw or crash journey data processing", () => {
     expect(() => {

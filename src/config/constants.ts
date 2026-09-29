@@ -5,6 +5,7 @@
 
 // Geofencing Spatial Thresholds (in meters)
 export const BOARDING_STOP_THRESHOLD_METERS = 35;
+export const AT_STOP_EXIT_THRESHOLD_METERS = 50; // Hysteresis threshold to prevent jitter oscillation
 export const ALIGHTING_APPROACH_THRESHOLD_METERS = 120;
 export const ALIGHTED_STOP_THRESHOLD_METERS = 30;
 export const ARRIVAL_THRESHOLD_METERS = 25;

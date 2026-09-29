@@ -12,6 +12,7 @@ import {
   TransferLeg,
   Coordinate,
 } from "@/types/journey";
+import { JourneyRankingService } from "./journeyRanking";
 
 export interface RouterDiagnostics {
   serviceCalls: number;
@@ -710,9 +711,12 @@ export class RouterService {
     const routerCpuTimeMs = performance.now() - cpuStartTime;
     const totalRequestTimeMs = performance.now() - startTime;
     const sqlQueriesExecuted = Math.min(2, SqlTracker.getQueryCount() - initialSqlCount);
+    const finalJourneys = request.preferences?.rankingPreference
+      ? JourneyRankingService.rankJourneys(uniqueJourneys, request.preferences.rankingPreference)
+      : uniqueJourneys;
 
     return {
-      journeys: uniqueJourneys,
+      journeys: finalJourneys,
       diagnostics: {
         serviceCalls: 1,
         sqlQueries: sqlQueriesExecuted,

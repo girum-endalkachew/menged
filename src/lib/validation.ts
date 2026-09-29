@@ -4,6 +4,7 @@ export const routePreferenceSchema = z.enum([
   "cheapest",
   "fastest",
   "least_walking",
+  "fewest_transfers",
   "balanced",
 ]);
 

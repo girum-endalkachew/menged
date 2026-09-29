@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { RouteOption } from '@/types/transit';
-import { Journey, RouteRequest, TransitLeg, Coordinate } from '@/types/journey';
+import { Journey, RouteRequest, TransitLeg, Coordinate, JourneyRankingPreference } from '@/types/journey';
 import { ActiveJourneyState, GPSLocation, StateEvaluationResult } from '@/types/navigation';
 import { mapJourneyToRouteOption } from '@/lib/journeyAdapter';
+import { JourneyRankingService } from '@/services/journeyRanking';
 
 export type JourneyState = 
   | "PLANNING"
@@ -74,7 +75,7 @@ interface MengedState {
   origin: string;
   destination: string;
   budgetETB: number | null;
-  preference: "cheapest" | "fastest" | "least_walking" | "balanced";
+  preference: JourneyRankingPreference;
   
   // Data Collections (Authoritative Backend + Presentation Models)
   routes: RouteOption[];
@@ -107,7 +108,7 @@ interface MengedState {
   setOrigin: (v: string) => void;
   setDestination: (v: string) => void;
   setBudget: (v: number | null) => void;
-  setPreference: (v: "cheapest" | "fastest" | "least_walking" | "balanced") => void;
+  setPreference: (v: JourneyRankingPreference) => void;
   setSelectedRoute: (v: RouteOption | null) => void;
   filterRoutes: () => void;
   
@@ -128,7 +129,7 @@ interface MengedState {
   saveCurrentRoute: (route: RouteOption) => void;
 
   // Journey Lifecycle Actions
-  startJourney: () => void;
+  startJourney: (journey?: Journey) => boolean;
   cancelJourney: () => void;
 }
 
@@ -204,7 +205,12 @@ export const useMengedStore = create<MengedState>((set, get) => ({
   },
 
   setSelectedRoute: (selectedRoute) => {
-    const { rawJourneys } = get();
+    const { rawJourneys, isNavigating } = get();
+    if (isNavigating) {
+      // During active navigation, do not cancel active navigation or overwrite activeJourney
+      set({ selectedRoute });
+      return;
+    }
     const matchingJourney = rawJourneys.find((j) => j.id === selectedRoute?.id) || null;
     set({
       selectedRoute,
@@ -217,22 +223,25 @@ export const useMengedStore = create<MengedState>((set, get) => ({
   },
   
   filterRoutes: () => {
-    const { preference, budgetETB, routes } = get();
-    let sorted = [...routes];
+    const { preference, budgetETB, rawJourneys } = get();
+    if (rawJourneys.length === 0) return;
+
+    const rankedJourneys = JourneyRankingService.rankJourneys(rawJourneys, preference);
+    let mapped = rankedJourneys.map(mapJourneyToRouteOption);
 
     if (budgetETB !== null) {
-      sorted = sorted.filter((r) => r.totalCostETB <= budgetETB);
+      mapped = mapped.filter((r) => r.totalCostETB <= budgetETB);
     }
 
-    if (preference === "cheapest") {
-      sorted.sort((a, b) => a.totalCostETB - b.totalCostETB);
-    } else if (preference === "fastest") {
-      sorted.sort((a, b) => a.estimatedMinutes - b.estimatedMinutes);
-    } else if (preference === "least_walking") {
-      sorted.sort((a, b) => a.walkingMinutes - b.walkingMinutes);
-    }
-
-    set({ routes: sorted, selectedRoute: null, activeJourney: null, activeJourneyState: null, isNavigating: false, journeyState: "PLANNING" });
+    set({
+      routes: mapped,
+      rawJourneys: rankedJourneys,
+      selectedRoute: mapped[0] || null,
+      activeJourney: rankedJourneys[0] || null,
+      activeJourneyState: null,
+      isNavigating: false,
+      journeyState: mapped[0] ? "ROUTE_SELECTED" : "PLANNING",
+    });
   },
 
   requestGPSLocation: async () => {
@@ -346,15 +355,17 @@ export const useMengedStore = create<MengedState>((set, get) => ({
         return true;
       }
 
-      const mappedOptions = fetchedJourneys.map(mapJourneyToRouteOption);
+      const currentPref = get().preference;
+      const rankedJourneys = JourneyRankingService.rankJourneys(fetchedJourneys, currentPref);
+      const mappedOptions = rankedJourneys.map(mapJourneyToRouteOption);
 
       set({
         isLoadingRoutes: false,
         routeError: null,
-        rawJourneys: fetchedJourneys,
+        rawJourneys: rankedJourneys,
         routes: mappedOptions,
         selectedRoute: mappedOptions[0] || null,
-        activeJourney: fetchedJourneys[0] || null,
+        activeJourney: rankedJourneys[0] || null,
         activeJourneyState: null,
         isNavigating: false,
         journeyState: mappedOptions[0] ? "ROUTE_SELECTED" : "PLANNING",
@@ -375,7 +386,10 @@ export const useMengedStore = create<MengedState>((set, get) => ({
     if (activeJourneyState.currentState === "ARRIVED") return;
 
     const reqSeq = get().journeyStateRequestSeq + 1;
-    set({ journeyStateRequestSeq: reqSeq });
+    set({
+      journeyStateRequestSeq: reqSeq,
+      gpsAccuracy: location.accuracy ?? null,
+    });
 
     try {
       const response = await fetch("/api/journey/state", {
@@ -447,15 +461,23 @@ export const useMengedStore = create<MengedState>((set, get) => ({
   removeSavedPlace: (id) => set((s) => ({ savedPlaces: s.savedPlaces.filter((p) => p.id !== id) })),
   saveCurrentRoute: (route) => set((s) => ({ savedRoutes: [...s.savedRoutes.filter((r) => r.id !== route.id), route] })),
 
-  startJourney: () => {
-    const { activeJourney } = get();
-    if (!activeJourney) return;
+  startJourney: (explicitJourney?: Journey) => {
+    const { activeJourney, selectedRoute, rawJourneys } = get();
+    const targetJourney =
+      explicitJourney ||
+      activeJourney ||
+      (selectedRoute ? rawJourneys.find((j) => j.id === selectedRoute.id) : null);
 
-    const firstTransitLeg = activeJourney.legs.find((l): l is TransitLeg => l.type === "TRANSIT");
+    if (!targetJourney) {
+      console.warn("[startJourney] Cannot start navigation: no valid journey provided or selected.");
+      return false;
+    }
+
+    const firstTransitLeg = targetJourney.legs.find((l): l is TransitLeg => l.type === "TRANSIT");
     const stopName = firstTransitLeg?.boardingStop.name || "the transit stop";
 
     const initialActiveState: ActiveJourneyState = {
-      journeyId: activeJourney.id,
+      journeyId: targetJourney.id,
       currentState: "PLANNED",
       currentLegIndex: 0,
       boardingConfirmed: false,
@@ -465,6 +487,8 @@ export const useMengedStore = create<MengedState>((set, get) => ({
     };
 
     set({
+      activeJourney: targetJourney,
+      selectedRoute: mapJourneyToRouteOption(targetJourney),
       activeJourneyState: initialActiveState,
       isNavigating: true,
       gpsError: null,
@@ -472,6 +496,7 @@ export const useMengedStore = create<MengedState>((set, get) => ({
       journeyStateRequestSeq: 0,
       latestCompletedJourneySeq: 0,
     });
+    return true;
   },
 
   cancelJourney: () => {

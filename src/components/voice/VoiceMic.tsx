@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useCallback, useEffect, useRef } from "react";
 import { Mic, Volume2, Sparkles } from "lucide-react";
@@ -49,13 +49,16 @@ export default function VoiceMic() {
 
       if (lower.includes("cheapest") || lower.includes("cheap") || lower.includes("birr")) {
         setPreference("cheapest");
-        toast.success("Preference set to: Cheapest");
+        toast.info("Fare data is unavailable in GTFS; preserved balanced ordering");
       } else if (lower.includes("fastest") || lower.includes("fast") || lower.includes("quick")) {
         setPreference("fastest");
         toast.success("Preference set to: Fastest");
       } else if (lower.includes("walk") || lower.includes("less walking")) {
         setPreference("least_walking");
         toast.success("Preference set to: Least Walking");
+      } else if (lower.includes("transfer") || lower.includes("direct")) {
+        setPreference("fewest_transfers");
+        toast.success("Preference set to: Fewest Transfers");
       }
     },
     [setDestination, setOrigin, setPreference],

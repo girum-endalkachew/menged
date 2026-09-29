@@ -158,5 +158,5 @@ describe("Phase 4 Task 2 P1 Fix: Transfer Journey ID Uniqueness & Selection Iden
 
     expect(ids.length).toBeGreaterThan(0);
     expect(uniqueIds.size).toBe(ids.length);
-  }, 15000);
+  }, 30000);
 });

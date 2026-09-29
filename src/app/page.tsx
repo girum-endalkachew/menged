@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import { useMengedStore } from "@/store/useMengedStore";
@@ -84,26 +84,45 @@ export default function Page() {
                       <span className="text-[10px] font-mono uppercase tracking-widest text-text-muted flex items-center gap-1.5 font-semibold">
                         <SlidersHorizontal className="w-3.5 h-3.5" /> Pref
                       </span>
-                      <div className="flex gap-1">
-                        {(["cheapest", "fastest", "least_walking", "balanced"] as const).map((pref) => (
-                          <button
-                            key={pref}
-                            onClick={() => setPreference(pref)}
-                            className={`text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition-all cursor-pointer border ${
-                              preference === pref
-                                ? "bg-brand-forest text-white border-brand-forest"
-                                : "bg-transparent border-transparent text-text-secondary hover:bg-surface-soft"
-                            }`}
-                          >
-                            {pref === "cheapest" ? "Cheapest" : pref === "fastest" ? "Fastest" : pref === "least_walking" ? "Less Walk" : "Balanced"}
-                          </button>
-                        ))}
+                      <div className="flex flex-wrap gap-1">
+                        {(["fastest", "least_walking", "fewest_transfers", "balanced", "cheapest"] as const).map((pref) => {
+                          const isCheapest = pref === "cheapest";
+                          return (
+                            <button
+                              key={pref}
+                              onClick={() => {
+                                if (!isCheapest) {
+                                  setPreference(pref);
+                                }
+                              }}
+                              disabled={isCheapest}
+                              title={isCheapest ? "Fare data is unavailable in GTFS dataset" : undefined}
+                              className={`text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition-all border ${
+                                isCheapest
+                                  ? "opacity-45 cursor-not-allowed bg-transparent border-transparent text-text-muted"
+                                  : preference === pref
+                                  ? "bg-brand-forest text-white border-brand-forest cursor-pointer"
+                                  : "bg-transparent border-transparent text-text-secondary hover:bg-surface-soft cursor-pointer"
+                              }`}
+                            >
+                              {pref === "cheapest"
+                                ? "Cheapest (N/A)"
+                                : pref === "fastest"
+                                ? "Fastest"
+                                : pref === "least_walking"
+                                ? "Less Walk"
+                                : pref === "fewest_transfers"
+                                ? "Few Transfers"
+                                : "Balanced"}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                     <RouteSelector />
                     {selectedRoute && (
                       <button
-                        onClick={startJourney}
+                        onClick={() => startJourney()}
                         className="w-full py-3.5 text-sm uppercase tracking-widest font-bold rounded-xl bg-brand-forest text-white flex items-center justify-center gap-2 hover:bg-brand-green transition-colors cursor-pointer"
                       >
                         <Play className="w-4 h-4 fill-current" />
